@@ -1,0 +1,2900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>dronmxE - DJI Waypoint Mission Planner</title>
+  <link rel="stylesheet" href="leaflet.css" />
+  <script src="leaflet.js"></script>
+  <script src="jszip.min.js"></script>
+  <style>
+    :root {
+      --primary: #1e88e5;
+      --primary-dark: #1565c0;
+      --primary-light: #e3f2fd;
+      --accent-green: #2e7d32;
+      --accent-red: #d32f2f;
+      --accent-purple: #7c4dff;
+      --accent-purple-light: #d8ccf8;
+      --bg-panel: #ffffff;
+      --bg-subtle: #f5f7fb;
+      --border-color: #e2e8f0;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+      --flight-line: #ffd54f;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: #000;
+      color: var(--text-main);
+      user-select: none;
+    }
+
+    /* =========================================================
+       SIDEBAR / LEFT DRAWER (Resizable / Collapsible)
+       ========================================================= */
+    #sidebar {
+      width: 380px;
+      min-width: 340px;
+      max-width: 440px;
+      background: var(--bg-panel);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      z-index: 1000;
+      box-shadow: 2px 0 16px rgba(0,0,0,0.15);
+      position: relative;
+      transition: transform 0.25s ease;
+    }
+
+    #sidebar.hidden {
+      transform: translateX(-100%);
+    }
+
+    .drawer-view {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .drawer-view.active {
+      display: flex;
+    }
+
+    /* Header */
+    .app-header {
+      padding: 16px 20px 14px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .app-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-title {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #0f172a;
+    }
+
+    .app-author-link {
+      font-size: 0.85rem;
+      color: var(--primary-dark);
+      background: var(--primary-light);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      text-decoration: none;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+
+    .app-author-link:active {
+      background: #bbdefb;
+      transform: scale(0.96);
+    }
+
+    /* Segmented Tab Bar: Area, Corridor, Circle, Quick */
+    .mode-tab-bar {
+      display: flex;
+      background: #edf2f7;
+      border-radius: 9999px;
+      padding: 4px;
+      margin: 14px 18px 8px 18px;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 8px 0;
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .mode-tab.active {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .section-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .empty-missions-hint {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding: 8px 0;
+    }
+
+    .mission-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mission-card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .mission-card:hover {
+      border-color: var(--primary);
+    }
+
+    .mission-card.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .mission-card-info h4 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+
+    .mission-card-info p {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .mission-card-delete {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .mission-card-delete:hover {
+      color: var(--accent-red);
+      background: #fee2e2;
+    }
+
+    .drawer-footer {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fafafa;
+    }
+
+    .footer-note {
+      font-size: 0.72rem;
+      color: var(--accent-green);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* =========================================================
+       SCREEN 2: MISSION CONFIGURATION SCREEN
+       ========================================================= */
+    .stats-header-card {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 10px 6px;
+      margin-bottom: 4px;
+    }
+
+    .stat-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      text-align: center;
+    }
+
+    .stat-chip-icon {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .stat-chip-val {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .config-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .config-subtext {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: -2px;
+    }
+
+    .select-input {
+      width: 100%;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--text-main);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .segmented-control {
+      display: flex;
+      background: #edf2f7;
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .segmented-btn {
+      flex: 1;
+      padding: 7px 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text-muted);
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .segmented-btn.active {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .stepper-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .step-btn {
+      width: 36px;
+      height: 36px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.1s;
+    }
+
+    .step-btn.coarse {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .step-btn:active {
+      background: #e2e8f0;
+      transform: scale(0.96);
+    }
+
+    .step-val-box {
+      flex: 1;
+      height: 36px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .shutter-carousel {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px;
+      scrollbar-width: none;
+    }
+
+    .shutter-carousel::-webkit-scrollbar {
+      display: none;
+    }
+
+    .shutter-chip {
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .shutter-chip.active {
+      background: var(--primary-light);
+      border-color: var(--primary);
+      color: var(--primary-dark);
+      font-weight: 800;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1;
+      transition: .25s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .btn-outline-pill {
+      width: 100%;
+      padding: 10px 16px;
+      border-radius: 9999px;
+      border: 1.5px solid var(--border-color);
+      background: #ffffff;
+      color: #1e293b;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.15s;
+    }
+
+    .btn-outline-pill:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .config-nav-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .pill-btn {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 9999px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .pill-btn.btn-back {
+      background: #0d47a1;
+      color: #ffffff;
+    }
+
+    .pill-btn.btn-save {
+      background: var(--accent-green);
+      color: #ffffff;
+    }
+
+    .pill-btn.btn-next {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .pill-btn:active {
+      transform: scale(0.97);
+      opacity: 0.9;
+    }
+
+    /* =========================================================
+       SCREEN 3: EXPORT KMZ SCREEN (Full width / Two Column View)
+       ========================================================= */
+    #export-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #f8fafc;
+      z-index: 2000;
+      display: none;
+      flex-direction: column;
+    }
+
+    #export-screen.active {
+      display: flex;
+    }
+
+    .export-top-bar {
+      padding: 16px 28px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .export-top-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn-icon-back {
+      background: transparent;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: #334155;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    .export-header-text h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .export-header-text p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .export-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-export-pill {
+      padding: 8px 18px;
+      border-radius: 9999px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-export-pill:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .export-body {
+      flex: 1;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+    }
+
+    .file-name-field {
+      display: flex;
+      align-items: center;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 16px;
+      gap: 12px;
+    }
+
+    .file-name-field label {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .file-name-field input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .export-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      flex: 1;
+    }
+
+    .export-col-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .col-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .col-header .btn-refresh {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: var(--text-muted);
+    }
+
+    .slot-item {
+      border: 1.5px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .slot-item.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .slot-item-info h5 {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .slot-item-info p {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .direct-access-badge {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: auto;
+      padding-top: 10px;
+    }
+
+    .direct-access-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    /* =========================================================
+       MAP CONTAINER & FLOATING ACTION CONTROLS
+       ========================================================= */
+    #map-wrapper {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: #111827;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-top-left-controls {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .map-btn-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .map-action-square-btn {
+      width: 44px;
+      height: 44px;
+      background: #ffffff;
+      border: none;
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.15rem;
+      color: #1e293b;
+      transition: all 0.15s;
+    }
+
+    .map-action-square-btn:active {
+      transform: scale(0.95);
+    }
+
+    .map-reset-btn {
+      height: 44px;
+      padding: 0 18px;
+      background: var(--accent-red);
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .map-reset-btn:active {
+      transform: scale(0.95);
+      background: #b71c1c;
+    }
+
+    .map-points-badge {
+      background: #ffffff;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #334155;
+      box-shadow: var(--shadow-sm);
+      width: fit-content;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .map-points-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    .map-bottom-left-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 18px;
+      z-index: 1000;
+    }
+
+    .map-undo-btn {
+      width: 44px;
+      height: 44px;
+      background: #ffffff;
+      border: none;
+      border-radius: 50%;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: #1e293b;
+      transition: all 0.15s;
+    }
+
+    .map-undo-btn:active {
+      transform: scale(0.93);
+    }
+
+    .map-right-toolbar {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tool-btn-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .tool-circle-btn {
+      width: 46px;
+      height: 46px;
+      background: #ffffff;
+      border: none;
+      border-radius: 50%;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.15rem;
+      color: #1e293b;
+      transition: all 0.15s;
+    }
+
+    .tool-circle-btn:active {
+      transform: scale(0.94);
+    }
+
+    .tool-circle-btn.active {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .tool-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      letter-spacing: 0.3px;
+    }
+
+    .map-bottom-right-controls {
+      position: absolute;
+      bottom: 22px;
+      right: 22px;
+      z-index: 1000;
+    }
+
+    .map-floating-next-btn {
+      padding: 13px 32px;
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 9999px;
+      font-size: 0.98rem;
+      font-weight: 800;
+      box-shadow: var(--shadow-lg);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+
+    .map-floating-next-btn:active {
+      transform: scale(0.96);
+      background: var(--primary-dark);
+    }
+
+    /* =========================================================
+       MODAL DIALOGS
+       ========================================================= */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(3px);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 480px;
+      max-width: 90vw;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: var(--shadow-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      0% { opacity: 0; transform: scale(0.92); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .modal-subtext-blue {
+      font-size: 0.8rem;
+      color: #1976d2;
+      background: #e3f2fd;
+      padding: 10px 14px;
+      border-radius: 10px;
+      line-height: 1.45;
+    }
+
+    .modal-section-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-slots-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .modal-btn-close {
+      background: transparent;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--primary);
+      cursor: pointer;
+      padding: 8px 16px;
+    }
+
+    .modal-btn-send {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 10px 22px;
+      border-radius: 9999px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .modal-input {
+      width: 100%;
+      background: var(--bg-subtle);
+      border: 1.5px solid var(--border-color);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #0f172a;
+      outline: none;
+    }
+    .modal-input:focus {
+      border-color: var(--primary);
+    }
+
+    /* Custom Leaflet Map styling */
+    .leaflet-bar { border: none !important; box-shadow: var(--shadow-md) !important; }
+    .custom-vertex-icon {
+      background: #ffffff;
+      border: 3px solid #7c4dff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .custom-midpoint-icon {
+      background: #d8ccf8;
+      border: 2px solid #7c4dff;
+      border-radius: 50%;
+      opacity: 0.85;
+    }
+    .custom-takeoff-icon {
+      background: #2e7d32;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .user-gps-pulse-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .user-gps-core {
+      width: 14px;
+      height: 14px;
+      background: #0070f3;
+      border: 2.5px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(0, 112, 243, 0.9);
+      position: relative;
+    }
+    .user-gps-pulse {
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0, 112, 243, 0.4);
+      animation: pulseGps 1.8s infinite ease-out;
+    }
+    @keyframes pulseGps {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================
+       SIDEBAR / LEFT DRAWER
+       ========================================================= -->
+  <div id="sidebar">
+    
+    <!-- VIEW 1: MAP DRAWING & MISSION LIBRARY -->
+    <div id="drawer-view-map" class="drawer-view active">
+      <div class="app-header">
+        <div class="app-title-row">
+          <span class="app-title">dronmxE</span>
+          <a href="mailto:jhonson2490@gmail.com?subject=dronmxE%20Misiones" class="app-author-link" title="Contactar a Edgar" onclick="if(window.AndroidBridge && window.AndroidBridge.openEmail){ window.AndroidBridge.openEmail('jhonson2490@gmail.com'); return false; }">
+            Edgar 🇲🇽
+          </a>
+        </div>
+      </div>
+
+      <!-- Mode Selector: 2D Mapeo, 3D Modelo, Corredor, Círculo -->
+      <div class="mode-tab-bar">
+        <div class="mode-tab active" id="tab-mode-2d" onclick="setMissionMode('2D')">2D Mapeo</div>
+        <div class="mode-tab" id="tab-mode-3d" onclick="setMissionMode('3D')">3D Modelo</div>
+        <div class="mode-tab" id="tab-mode-corridor" onclick="setMissionMode('Corridor')">Corredor</div>
+        <div class="mode-tab" id="tab-mode-circle" onclick="setMissionMode('Circle')">Círculo</div>
+      </div>
+
+      <!-- Missions Library List -->
+      <div class="drawer-content">
+        <div class="section-title">
+          <span>Mis Misiones</span>
+          <span id="saved-count-badge" style="font-size: 0.74rem; color: var(--text-muted);">0 guardadas</span>
+        </div>
+        
+        <div id="empty-missions-hint" class="empty-missions-hint">
+          No hay misiones guardadas aún. Dibuja un polígono en el mapa y presiona el ícono de Guardar (💾).
+        </div>
+
+        <div id="missions-container" class="mission-list"></div>
+      </div>
+
+      <div class="drawer-footer">
+        <div class="footer-note">✓ Conexión directa a DJI Fly lista</div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: MISSION CONFIGURATION SCREEN -->
+    <div id="drawer-view-config" class="drawer-view">
+      <div class="app-header">
+        <div class="app-title-row">
+          <span class="app-title" style="font-size: 1.25rem;">Parámetros</span>
+          <span style="font-size: 0.78rem; color: var(--text-muted); cursor: pointer;" onclick="switchToView('map')">Volver al mapa</span>
+        </div>
+      </div>
+
+      <div class="drawer-content">
+        <!-- Top Stats Chip Card -->
+        <div class="stats-header-card">
+          <div class="stat-chip">
+            <span class="stat-chip-icon">⏱️</span>
+            <span class="stat-chip-val" id="stat-time">0:00</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip-icon">📏</span>
+            <span class="stat-chip-val" id="stat-distance">0.0 km</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip-icon">📐</span>
+            <span class="stat-chip-val" id="stat-area">0.0 ha</span>
+          </div>
+          <div class="stat-chip" title="1 foto tomada en cada waypoint">
+            <span class="stat-chip-icon">📸</span>
+            <span class="stat-chip-val" id="stat-waypoints">0 WP/Fotos</span>
+          </div>
+          <div class="stat-chip" style="grid-column: span 2;" title="Cálculo de baterías (DJI Fly soporta corte por batería baja y reanudación automática)">
+            <span class="stat-chip-icon">🔋</span>
+            <span class="stat-chip-val" id="stat-batteries">1 Batería · Reanuda en corte</span>
+          </div>
+        </div>
+
+        <!-- Camera Model -->
+        <div class="config-group">
+          <label class="config-label">Cámara</label>
+          <select id="cfg-camera" class="select-input" onchange="recalculateMission()">
+            <option value="DJI_MINI_5_PRO" selected>DJI Mini 5 Pro (1/1.3" CMOS, 24mm)</option>
+            <option value="DJI_MINI_4_PRO">DJI Mini 4 Pro (1/1.3" CMOS, 24mm)</option>
+            <option value="DJI_AIR_3S">DJI Air 3S (1" CMOS 50MP, 24mm)</option>
+            <option value="DJI_MAVIC_3_PRO">DJI Mavic 3 Pro (4/3 CMOS 20MP)</option>
+          </select>
+        </div>
+
+        <!-- Altitude Mode: Take Off vs Ground -->
+        <div class="config-group">
+          <label class="config-label">Modo de Altitud</label>
+          <div class="segmented-control">
+            <button class="segmented-btn active" id="btn-alt-takeoff" onclick="setAltitudeMode('takeoff')">Take Off</button>
+            <button class="segmented-btn" id="btn-alt-ground" onclick="setAltitudeMode('ground')">Ground (DEM)</button>
+          </div>
+          <div id="dem-box" style="display: none; margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; font-size: 0.8rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: #166534;">Relieve y Terreno (DEM Copernicus)</span>
+              <button class="btn-outline-pill" style="font-size: 0.72rem; padding: 4px 10px; background: #dcfce7; color: #166534; border: 1px solid #86efac; cursor: pointer; border-radius: 9999px;" onclick="fetchDemElevations()">⛰️ Descargar DEM</button>
+            </div>
+            <div id="disp-dem-status" style="color: #15803d; line-height: 1.4;">
+              Altitud constante sobre el terreno (AGL) activa. Presiona Descargar DEM para consultar el relieve topográfico de la misión.
+            </div>
+          </div>
+        </div>
+
+        <!-- Altitude Stepper -->
+        <div class="config-group">
+          <label class="config-label">Altitud objetivo s.n. despegue (m)</label>
+          <div class="stepper-wrap">
+            <button class="step-btn coarse" onclick="adjustStep('alt', -10)">--</button>
+            <button class="step-btn" onclick="adjustStep('alt', -5)">-</button>
+            <div class="step-val-box" id="disp-alt">80.0 m</div>
+            <button class="step-btn" onclick="adjustStep('alt', 5)">+</button>
+            <button class="step-btn coarse" onclick="adjustStep('alt', 10)">++</button>
+          </div>
+        </div>
+
+        <!-- Drone Speed Stepper -->
+        <div class="config-group">
+          <label class="config-label">Velocidad del dron (m/s)</label>
+          <div class="stepper-wrap">
+            <button class="step-btn" onclick="adjustStep('speed', -1)">-</button>
+            <div class="step-val-box" id="disp-speed">8.0 m/s (29 km/h)</div>
+            <button class="step-btn" onclick="adjustStep('speed', 1)">+</button>
+          </div>
+          <div class="config-subtext" id="disp-photo-interval" style="color: #0369a1; font-weight: 700; background: #e0f2fe; padding: 6px 10px; border-radius: 6px; margin-top: 6px;">
+            📸 Captura por Waypoint: 1 foto en cada punto estimado
+          </div>
+        </div>
+
+        <!-- Overlap Steppers -->
+        <div class="config-group">
+          <label class="config-label">Solape Frontal / Lateral (%)</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="stepper-wrap">
+              <button class="step-btn" onclick="adjustStep('frontOverlap', -5)">-</button>
+              <div class="step-val-box" id="disp-front-overlap">80%</div>
+              <button class="step-btn" onclick="adjustStep('frontOverlap', 5)">+</button>
+            </div>
+            <div class="stepper-wrap">
+              <button class="step-btn" onclick="adjustStep('sideOverlap', -5)">-</button>
+              <div class="step-val-box" id="disp-side-overlap">70%</div>
+              <button class="step-btn" onclick="adjustStep('sideOverlap', 5)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera Pitch Angle -->
+        <div class="config-group">
+          <label class="config-label">Ángulo de cámara (°)</label>
+          <div class="stepper-wrap">
+            <button class="step-btn coarse" onclick="adjustStep('gimbal', -10)">--</button>
+            <button class="step-btn" onclick="adjustStep('gimbal', -5)">-</button>
+            <div class="step-val-box" id="disp-gimbal">-90.0° (Nadir)</div>
+            <button class="step-btn" onclick="adjustStep('gimbal', 5)">+</button>
+            <button class="step-btn coarse" onclick="adjustStep('gimbal', 10)">++</button>
+          </div>
+        </div>
+
+        <!-- Orientación del Vuelo (Barra Deslizante + Número) -->
+        <div class="config-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="config-label" style="margin: 0;">Orientación del Vuelo</label>
+            <span id="disp-grid-angle" style="font-weight: 800; color: var(--primary); font-size: 1rem;">0°</span>
+          </div>
+
+          <!-- Barra deslizante interactiva -->
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">0°</span>
+            <input type="range" id="slider-grid-angle" min="0" max="360" value="0" step="1" 
+                   style="flex: 1; accent-color: var(--primary); height: 6px; cursor: pointer;"
+                   oninput="onGridAngleSlider(this.value)">
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">360°</span>
+          </div>
+
+          <!-- Ajuste fino numérico -->
+          <div class="stepper-wrap">
+            <button class="step-btn coarse" onclick="adjustStep('gridAngle', -45)">-45°</button>
+            <button class="step-btn" onclick="adjustStep('gridAngle', -5)">-5°</button>
+            <div class="step-val-box" id="disp-grid-angle-btn">0°</div>
+            <button class="step-btn" onclick="adjustStep('gridAngle', 5)">+5°</button>
+            <button class="step-btn coarse" onclick="adjustStep('gridAngle', 45)">+45°</button>
+          </div>
+        </div>
+
+        <!-- Shutter Speed Carousel -->
+        <div class="config-group">
+          <label class="config-label">Velocidad de obturación</label>
+          <div class="shutter-carousel">
+            <div class="shutter-chip" onclick="setShutter(800, this)">1/800</div>
+            <div class="shutter-chip active" onclick="setShutter(1000, this)">1/1000</div>
+            <div class="shutter-chip" onclick="setShutter(1250, this)">1/1250</div>
+            <div class="shutter-chip" onclick="setShutter(1600, this)">1/1600</div>
+            <div class="shutter-chip" onclick="setShutter(2000, this)">1/2000</div>
+          </div>
+        </div>
+
+        <!-- Finish Action (Litchi WPML) -->
+        <div class="config-group">
+          <label class="config-label">Acción al terminar misión</label>
+          <select id="cfg-finish-action" class="select-input" onchange="AppState.finishAction=this.value">
+            <option value="goHome" selected>Regresar a Casa (RTH · Seguro)</option>
+            <option value="noAction">Suspender en último punto (Hover)</option>
+            <option value="autoLand">Aterrizar automáticamente</option>
+            <option value="gotoFirstWaypoint">Volver al Waypoint 1</option>
+          </select>
+        </div>
+
+        <!-- Signal Loss Action (Litchi WPML) -->
+        <div class="config-group">
+          <label class="config-label">Al perder señal RC (Litchi)</label>
+          <select id="cfg-lost-action" class="select-input" onchange="AppState.signalLossAction=this.value">
+            <option value="continue" selected>Continuar misión autónoma (como BañoNeza2)</option>
+            <option value="goBack">Regresar a Casa (RTH)</option>
+            <option value="hover">Quedarse suspendido (Hover)</option>
+          </select>
+        </div>
+
+        <!-- Turn Mode (Litchi WPML) -->
+        <div class="config-group">
+          <label class="config-label">Modo de giro en curvas (Waypoints)</label>
+          <select id="cfg-turn-mode" class="select-input" onchange="AppState.turnMode=this.value">
+            <option value="toPointAndPassWithContinuityCurvature" selected>Curva continua fluida (Paso sin detenerse · Rápido)</option>
+            <option value="toPointAndStopWithContinuityCurvature">Detenerse y girar en cada punto</option>
+          </select>
+        </div>
+
+        <!-- Heading Mode (Litchi WPML) -->
+        <div class="config-group">
+          <label class="config-label">Orientación del dron (Heading)</label>
+          <select id="cfg-heading-mode" class="select-input" onchange="AppState.headingMode=this.value">
+            <option value="smoothTransition" selected>Transición suave al siguiente punto (Litchi)</option>
+            <option value="followWayline">Seguir rumbo de la línea de vuelo</option>
+            <option value="manually">Control manual por el piloto</option>
+          </select>
+        </div>
+
+        <!-- Acciones Rápidas: Descargas / Compartir / DJI Fly -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
+          <button class="btn-outline-pill" style="font-size: 0.82rem; padding: 10px; justify-content: center; font-weight: 700;" onclick="saveKmzToDownloads()">
+            💾 Descargas
+          </button>
+          <button class="btn-outline-pill" style="font-size: 0.82rem; padding: 10px; justify-content: center; font-weight: 700; background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;" onclick="shareKmzMission()">
+            📤 Compartir
+          </button>
+        </div>
+
+        <button class="btn-outline-pill" style="margin-top: 8px; width: 100%; justify-content: center; background: var(--bg-subtle); font-weight: 700;" onclick="openSendToDjiFlyModal()">
+          🚀 Enviar a DJI Fly...
+        </button>
+      </div>
+
+      <!-- Config Footer: Back, Save, Next -->
+      <div class="drawer-footer">
+        <div class="config-nav-row">
+          <button class="pill-btn btn-back" onclick="switchToView('map')">Volver</button>
+          <button class="pill-btn btn-save" onclick="openSaveMissionModal()">Guardar</button>
+          <button class="pill-btn btn-next" onclick="switchToView('export')">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- =========================================================
+       MAP VIEWPORT
+       ========================================================= -->
+  <div id="map-wrapper">
+    <div id="map"></div>
+
+    <!-- Floating Top-Left Controls: Save, Reset, Points badge -->
+    <div class="map-top-left-controls">
+      <div class="map-btn-row">
+        <button class="map-action-square-btn" title="Guardar Misión" onclick="openSaveMissionModal()">💾</button>
+        <button class="map-reset-btn" onclick="resetCurrentBoundary()">Reset</button>
+        <button class="map-action-square-btn" id="btn-map-dem" title="Consultar DEM y colorear altimetría (Azul/Rojo)" onclick="fetchDemElevations()" style="background: #2e7d32; color: #fff; font-size: 0.85rem; font-weight: 800; width: auto; padding: 0 12px; border-radius: 9999px;">⛰️ DEM</button>
+      </div>
+      <div class="map-points-badge" id="map-points-badge">0 puntos — esperando</div>
+    </div>
+
+    <!-- Floating Altimetry Legend (Visible when DEM is active) -->
+    <div id="altimetry-legend" style="display: none; position: absolute; top: 18px; left: 240px; z-index: 1000; background: rgba(255,255,255,0.96); backdrop-filter: blur(4px); padding: 7px 16px; border-radius: 9999px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); align-items: center; gap: 10px; font-size: 0.78rem; font-weight: 700; color: #1e293b; border: 1px solid #e2e8f0;">
+      <span style="color: #0055ff;">🔵 Bajo: <span id="leg-min-elev">0</span>m</span>
+      <div style="width: 100px; height: 9px; border-radius: 5px; background: linear-gradient(to right, #0055ff, #00e5ff, #00e676, #ffd600, #ff1744);"></div>
+      <span style="color: #ff1744;">🔴 Alto: <span id="leg-max-elev">0</span>m</span>
+    </div>
+
+    <!-- Floating Bottom-Left Controls: Undo -->
+    <div class="map-bottom-left-controls">
+      <button class="map-undo-btn" title="Deshacer último punto" onclick="undoLastPoint()">↺</button>
+    </div>
+
+    <!-- Floating Right-Side Vertical Action Bar: Cloud, MBTiles, KML, Location, Fullscreen, TERR -->
+    <div class="map-right-toolbar">
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" title="Descargar área offline" onclick="openOfflineDownloadModal()">☁️</button>
+        <span class="tool-label"></span>
+      </div>
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" title="Basemap MBTiles" onclick="openMbtilesModal()">🗂️</button>
+        <span class="tool-label">MBTiles</span>
+      </div>
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" title="Importar KML" onclick="openKmlImportModal()">📄</button>
+        <span class="tool-label">KML</span>
+      </div>
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" title="Mi ubicación GPS" onclick="locateUserPosition()">🎯</button>
+        <span class="tool-label"></span>
+      </div>
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" title="Pantalla completa" onclick="toggleFullscreen()">⛶</button>
+        <span class="tool-label"></span>
+      </div>
+      <div class="tool-btn-item">
+        <button class="tool-circle-btn" id="btn-terr" title="Relieve 3D / Terrain Follow" onclick="toggleTerrainFollow()">⛰️</button>
+        <span class="tool-label">TERR</span>
+      </div>
+    </div>
+
+    <!-- Floating Bottom-Right: Next Button -->
+    <div class="map-bottom-right-controls" id="map-next-container">
+      <button class="map-floating-next-btn" onclick="switchToView('config')">
+        Siguiente →
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       SCREEN 3: EXPORT KMZ FULL SCREEN
+       ========================================================= -->
+  <div id="export-screen">
+    <div class="export-top-bar">
+      <div class="export-top-left">
+        <button class="btn-icon-back" onclick="closeExportScreen()">←</button>
+        <div class="export-header-text">
+          <h2>Exportar KMZ</h2>
+          <p>Selecciona una misión y un slot de DJI Fly.</p>
+        </div>
+      </div>
+      <div class="export-top-actions">
+        <button class="btn-export-pill" onclick="saveKmzToDownloads()">💾 Guardar en Descargas</button>
+        <button class="btn-export-pill" style="background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;" onclick="shareKmzMission()">📤 Compartir KMZ</button>
+        <button class="btn-export-pill" onclick="closeExportScreen()">⌂ Inicio</button>
+      </div>
+    </div>
+
+    <div class="export-body">
+      <div class="file-name-field">
+        <label>Nombre de archivo:</label>
+        <input type="text" id="export-filename" value="mision_fotogrametria" />
+      </div>
+
+      <div class="export-two-col">
+        <!-- Left Col: Missions -->
+        <div class="export-col-card">
+          <div class="col-header">
+            <span>Misiones</span>
+            <button class="btn-refresh" onclick="refreshExportMissionsList()">↻</button>
+          </div>
+          <div id="export-missions-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="slot-item selected">
+              <div class="slot-item-info">
+                <h5 id="exp-current-mission-name">mision_actual</h5>
+                <p id="exp-current-mission-sub">Listo para exportar</p>
+              </div>
+              <span style="color: var(--primary); font-weight: 800;">✓</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Col: DJI Fly slots -->
+        <div class="export-col-card">
+          <div class="col-header">
+            <span>Slots de DJI Fly</span>
+            <button class="btn-refresh" onclick="refreshDjiSlots()">↻</button>
+          </div>
+
+          <div id="dji-slots-container" class="modal-slots-list"></div>
+
+          <button class="btn-export-pill" style="margin-top: 10px; background: var(--primary); color: #fff; justify-content: center; padding: 12px;" onclick="executeDjiInjection()">
+            🚀 Inyectar Misión en DJI Fly
+          </button>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+            <button class="btn-export-pill" style="justify-content: center;" onclick="saveKmzToDownloads()">💾 Descargas</button>
+            <button class="btn-export-pill" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;" onclick="shareKmzMission()">📤 Compartir</button>
+          </div>
+
+          <div class="direct-access-badge">
+            Acceso directo a carpeta — sin errores de .offlineflightmission_history.txt
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 1: SEND TO DJI FLY
+       ========================================================= -->
+  <div id="modal-send-dji" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Enviar a DJI Fly</h3>
+      <div class="modal-subtext-blue">
+        Acceso directo a carpeta activo — la misión se copia directamente a la biblioteca de Waypoints de DJI Fly y aparecerá en el Historial del control RC 2.
+      </div>
+
+      <div class="modal-section-title">
+        <span>Slots de DJI Fly</span>
+        <button class="btn-refresh" style="background: none; border: none; cursor: pointer; font-size: 1.1rem;" onclick="refreshDjiSlots()">↻</button>
+      </div>
+
+      <div id="modal-slots-list" class="modal-slots-list"></div>
+
+      <div class="modal-actions">
+        <button class="modal-btn-close" onclick="closeModal('modal-send-dji')">Cerrar</button>
+        <button class="modal-btn-send" onclick="executeDjiInjection()">Enviar a Slot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 2: GUARDAR MISIÓN
+       ========================================================= -->
+  <div id="modal-save-mission" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Guardar Misión</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Asigna un nombre para guardar esta misión en tu biblioteca:</p>
+      <input type="text" id="save-mission-name-input" class="modal-input" placeholder="Nombre de la misión..." value="Mision_Fotogrametria" />
+      <div class="modal-actions">
+        <button class="modal-btn-close" onclick="closeModal('modal-save-mission')">Cancelar</button>
+        <button class="modal-btn-send" onclick="confirmSaveMission()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 3: DESCARGA OFFLINE
+       ========================================================= -->
+  <div id="modal-offline-download" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Descarga de Mapa Offline</h3>
+      <div class="modal-subtext-blue">
+        Descarga las teselas satelitales del área visible para volar sin conexión a internet en campo.
+      </div>
+      <div style="font-size: 0.85rem; color: #334155; display: flex; flex-direction: column; gap: 8px;">
+        <label>Nivel de zoom objetivo:</label>
+        <select id="offline-zoom-select" class="select-input">
+          <option value="16">Zoom 16 (General ~ 15 MB)</option>
+          <option value="17" selected>Zoom 17 (Detalle Fotogramétrico ~ 45 MB)</option>
+          <option value="18">Zoom 18 (Alta Resolución ~ 120 MB)</option>
+        </select>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Área visible seleccionada: ~ 5.7 ha</p>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn-close" onclick="closeModal('modal-offline-download')">Cerrar</button>
+        <button class="modal-btn-send" onclick="startOfflineDownload()">Descargar Área</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 4: MBTILES BASEMAP
+       ========================================================= -->
+  <div id="modal-mbtiles" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Mapas Offline MBTiles</h3>
+      <div class="modal-subtext-blue">
+        Puedes colocar tus archivos raster <strong>.mbtiles</strong> en la carpeta <code>/sdcard/dronmxE/tiles/</code> del control para visualizarlos automáticamente.
+      </div>
+      <div style="font-size: 0.85rem; color: #334155;">
+        <p>Capas detectadas:</p>
+        <ul style="margin: 8px 0 0 20px; font-size: 0.82rem; color: var(--text-muted);">
+          <li>Google Satellite (Caché local activa)</li>
+          <li>Ortofoto VARI (Si está presente en la carpeta)</li>
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn-close" onclick="closeModal('modal-mbtiles')">Cerrar</button>
+        <button class="modal-btn-send" onclick="closeModal('modal-mbtiles')">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL 5: IMPORTAR KML / KMZ
+       ========================================================= -->
+  <div id="modal-kml-import" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Importar Polígono KML / KMZ</h3>
+      <div class="modal-subtext-blue">
+        Selecciona un archivo .kml o .kmz con un polígono o ruta de coordenadas para cargarlo directamente en el mapa.
+      </div>
+      <input type="file" id="kml-file-input" accept=".kml,.kmz" class="modal-input" onchange="handleKmlFileSelected(event)" />
+      <div class="modal-actions">
+        <button class="modal-btn-close" onclick="closeModal('modal-kml-import')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       JAVASCRIPT LOGIC
+       ========================================================= -->
+  <script>
+    // State
+    const AppState = {
+      mode: '2D', // '2D' (Mapeo 2D), '3D' (Modelo 3D doble cuadrícula), 'Corridor', 'Circle'
+      altitudeMode: 'takeoff', // takeoff, ground
+      altitude: 80.0,
+      speed: 8.0,
+      frontOverlap: 80,
+      sideOverlap: 70,
+      gimbalPitch: -90.0,
+      shutterSpeed: 1000,
+      autoGrid: true,
+      gridAngle: 45,
+      signalLossContinue: true,
+      finishAction: 'goHome',
+      signalLossAction: 'continue',
+      turnMode: 'toPointAndPassWithContinuityCurvature',
+      headingMode: 'smoothTransition',
+      demElevations: {},
+      takeoffElevation: null,
+      waylinesElevations: [],
+      demLoaded: false,
+      camera: 'DJI_MINI_5_PRO',
+      points: [], // LatLng vertices (inicia limpio sin nada dibujado)
+      waylines: [], // Calculated flight waypoints
+      activeSlotGuid: 'NEW',
+      savedMissions: []
+    };
+
+    // Camera specs
+    const CameraSpecs = {
+      DJI_MINI_5_PRO: { sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
+      DJI_MINI_4_PRO: { sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
+      DJI_AIR_3S: { sensorW: 13.2, sensorH: 8.8, focal: 8.4, imgW: 8192, imgH: 5464, droneId: 90 },
+      DJI_MAVIC_3_PRO: { sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 60 }
+    };
+
+    let map, polygonLayer, flightLinesLayer, markersLayer, userLocationLayer;
+
+    function initMap() {
+      const defaultCenter = [19.2625, -99.1025];
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(defaultCenter, 17);
+
+      L.tileLayer('https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 20
+      }).addTo(map);
+
+      polygonLayer = L.featureGroup().addTo(map);
+      flightLinesLayer = L.featureGroup().addTo(map);
+      markersLayer = L.featureGroup().addTo(map);
+      userLocationLayer = L.featureGroup().addTo(map);
+
+      map.on('click', function(e) {
+        if (AppState.mode === '2D' || AppState.mode === '3D' || AppState.mode === 'Area' || AppState.mode === 'Corridor') {
+          addBoundaryPoint(e.latlng);
+        } else if (AppState.mode === 'Circle') {
+          setupCircleCenter(e.latlng);
+        }
+      });
+
+      loadSavedMissionsFromStorage();
+      updatePointBadge();
+      updateStatDisplay(0, 0, 0, 0);
+
+      // Intentar ubicar al usuario automáticamente de forma limpia
+      setTimeout(() => {
+        locateUserPosition(false);
+      }, 600);
+    }
+
+    function setMissionMode(mode) {
+      AppState.mode = mode;
+      
+      const tabMap = {
+        '2D': 'tab-mode-2d',
+        '3D': 'tab-mode-3d',
+        'Corridor': 'tab-mode-corridor',
+        'Circle': 'tab-mode-circle'
+      };
+
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      const activeTab = document.getElementById(tabMap[mode]);
+      if (activeTab) activeTab.classList.add('active');
+
+      if (mode === '2D') {
+        AppState.gimbalPitch = -90.0;
+        const gEl = document.getElementById('disp-gimbal');
+        if (gEl) gEl.textContent = '-90.0° (Nadir)';
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Modo 2D Mapeo: Ortofoto cenital (Gimbal -90° Nadir)");
+        }
+      } else if (mode === '3D') {
+        AppState.gimbalPitch = -65.0;
+        const gEl = document.getElementById('disp-gimbal');
+        if (gEl) gEl.textContent = '-65.0° (Oblicuo 3D)';
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Modo 3D Modelo: Cuadrícula doble cruzada (Gimbal -65° Oblicuo)");
+        }
+      } else if (mode === 'Corridor') {
+        AppState.gimbalPitch = -90.0;
+        const gEl = document.getElementById('disp-gimbal');
+        if (gEl) gEl.textContent = '-90.0°';
+      } else if (mode === 'Circle') {
+        AppState.gimbalPitch = -45.0;
+        const gEl = document.getElementById('disp-gimbal');
+        if (gEl) gEl.textContent = '-45.0° (POIs)';
+        createCircleMission();
+        return;
+      }
+
+      renderBoundary();
+      recalculateMission();
+    }
+
+    function addBoundaryPoint(latlng) {
+      AppState.points.push(latlng);
+      renderBoundary();
+      recalculateMission();
+    }
+
+    function undoLastPoint() {
+      if (AppState.points.length > 0) {
+        AppState.points.pop();
+        renderBoundary();
+        recalculateMission();
+      }
+    }
+
+    function resetCurrentBoundary() {
+      AppState.points = [];
+      AppState.waylines = [];
+      polygonLayer.clearLayers();
+      markersLayer.clearLayers();
+      flightLinesLayer.clearLayers();
+      updatePointBadge();
+      updateStatDisplay(0, 0, 0, 0);
+    }
+
+    function renderBoundary() {
+      polygonLayer.clearLayers();
+      markersLayer.clearLayers();
+
+      const pts = AppState.points;
+      updatePointBadge();
+
+      if (pts.length < 2) return;
+
+      if (AppState.mode === 'Corridor') {
+        L.polyline(pts, {
+          color: '#1e88e5',
+          weight: 4,
+          lineJoin: 'round'
+        }).addTo(polygonLayer);
+      } else if (pts.length >= 3) {
+        L.polygon(pts, {
+          color: '#7c4dff',
+          weight: 3,
+          fillColor: '#7c4dff',
+          fillOpacity: 0.15,
+          lineJoin: 'round'
+        }).addTo(polygonLayer);
+      } else {
+        L.polyline(pts, {
+          color: '#7c4dff',
+          weight: 3,
+          dashArray: '6, 6'
+        }).addTo(polygonLayer);
+      }
+
+      pts.forEach((pt, idx) => {
+        const marker = L.marker(pt, {
+          draggable: true,
+          icon: L.divIcon({
+            className: 'custom-vertex-icon',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        }).addTo(markersLayer);
+
+        marker.on('drag', function(e) {
+          AppState.points[idx] = e.target.getLatLng();
+          renderBoundary();
+          recalculateMission();
+        });
+      });
+
+      if (pts.length >= 3 && AppState.mode !== 'Corridor') {
+        for (let i = 0; i < pts.length; i++) {
+          const nextIdx = (i + 1) % pts.length;
+          const midLat = (pts[i].lat + pts[nextIdx].lat) / 2;
+          const midLng = (pts[i].lng + pts[nextIdx].lng) / 2;
+          const midPoint = L.latLng(midLat, midLng);
+
+          const midMarker = L.marker(midPoint, {
+            icon: L.divIcon({
+              className: 'custom-midpoint-icon',
+              iconSize: [10, 10],
+              iconAnchor: [5, 5]
+            })
+          }).addTo(markersLayer);
+
+          midMarker.on('click', function() {
+            AppState.points.splice(i + 1, 0, midPoint);
+            renderBoundary();
+            recalculateMission();
+          });
+        }
+
+        const center = calculateCentroid(pts);
+        L.marker(center, {
+          icon: L.divIcon({
+            className: 'custom-takeoff-icon',
+            iconSize: [22, 22],
+            iconAnchor: [11, 11]
+          })
+        }).addTo(markersLayer);
+      }
+    }
+
+    function updatePointBadge() {
+      const count = AppState.points.length;
+      const badge = document.getElementById('map-points-badge');
+      if (count === 0) {
+        badge.textContent = '0 puntos — esperando';
+      } else if (count < 3) {
+        badge.textContent = `${count} puntos — agrega ${3 - count} más`;
+      } else {
+        badge.textContent = `${count} puntos — listo`;
+      }
+    }
+
+    function calculateCentroid(pts) {
+      let latSum = 0, lngSum = 0;
+      pts.forEach(p => { latSum += p.lat; lngSum += p.lng; });
+      return L.latLng(latSum / pts.length, lngSum / pts.length);
+    }
+
+    function createQuickRectangle() {
+      const center = map.getCenter();
+      const d = 0.001;
+      AppState.points = [
+        L.latLng(center.lat - d, center.lng - d * 1.3),
+        L.latLng(center.lat + d, center.lng - d * 1.3),
+        L.latLng(center.lat + d, center.lng + d * 1.3),
+        L.latLng(center.lat - d, center.lng + d * 1.3)
+      ];
+      renderBoundary();
+      recalculateMission();
+    }
+
+    function createCircleMission() {
+      const center = map.getCenter();
+      const radiusMeters = 60;
+      const waypoints = [];
+      const numPoints = 16;
+      for (let i = 0; i <= numPoints; i++) {
+        const angle = (i / numPoints) * 2 * Math.PI;
+        const lat = center.lat + (radiusMeters / 111320) * Math.sin(angle);
+        const lng = center.lng + (radiusMeters / (111320 * Math.cos(center.lat * Math.PI / 180))) * Math.cos(angle);
+        waypoints.push(L.latLng(lat, lng));
+      }
+      AppState.points = waypoints.slice(0, 8);
+      renderBoundary();
+      recalculateMission();
+    }
+
+    function recalculateMission() {
+      flightLinesLayer.clearLayers();
+      AppState.waylines = [];
+
+      if (AppState.points.length < 2) {
+        updateStatDisplay(0, 0, 0, 0);
+        return;
+      }
+
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+      const H = AppState.altitude;
+      
+      const footprintW = (H * cam.sensorW) / cam.focal;
+      const footprintH = (H * cam.sensorH) / cam.focal;
+
+      const lineSpacing = footprintW * (1 - (AppState.sideOverlap / 100));
+      const photoSpacing = footprintH * (1 - (AppState.frontOverlap / 100));
+
+      let gridWaypoints = [];
+      if (AppState.mode === 'Corridor') {
+        gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+      } else if (AppState.mode === '3D') {
+        gridWaypoints = generateCrossTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+      } else {
+        gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+      }
+      AppState.waylines = gridWaypoints;
+
+      const photoIntervalEl = document.getElementById('disp-photo-interval');
+      if (photoIntervalEl) {
+        photoIntervalEl.innerHTML = `📸 <b>1 foto por Waypoint</b> (${gridWaypoints.length} fotos calculadas · separación: ~${photoSpacing.toFixed(1)} m para ${AppState.frontOverlap}% solape)`;
+      }
+
+      if (gridWaypoints.length > 1) {
+        const hasDem = AppState.demLoaded && AppState.waylinesElevations && AppState.waylinesElevations.length >= gridWaypoints.length;
+        const legendEl = document.getElementById('altimetry-legend');
+
+        if (hasDem) {
+          const elevs = AppState.waylinesElevations.slice(0, gridWaypoints.length);
+          const minE = Math.min(...elevs);
+          const maxE = Math.max(...elevs);
+
+          if (legendEl) {
+            legendEl.style.display = 'flex';
+            const minSpan = document.getElementById('leg-min-elev');
+            const maxSpan = document.getElementById('leg-max-elev');
+            if (minSpan) minSpan.textContent = minE;
+            if (maxSpan) maxSpan.textContent = maxE;
+          }
+
+          // Draw segments with altimetry gradient (Azul = Bajo, Rojo = Alto)
+          for (let i = 0; i < gridWaypoints.length - 1; i++) {
+            const midElev = (elevs[i] + elevs[i + 1]) / 2;
+            const segColor = getElevationColor(midElev, minE, maxE);
+            L.polyline([[gridWaypoints[i].lat, gridWaypoints[i].lng], [gridWaypoints[i+1].lat, gridWaypoints[i+1].lng]], {
+              color: segColor,
+              weight: 3.5,
+              opacity: 0.95
+            }).addTo(flightLinesLayer);
+          }
+
+          // Draw waypoint markers with specific elevation color & photo tooltip
+          gridWaypoints.forEach((w, idx) => {
+            const el = elevs[idx];
+            const ptColor = getElevationColor(el, minE, maxE);
+            const deltaTakeoff = el - (AppState.takeoffElevation || minE);
+            const droneRelAlt = (AppState.altitude + deltaTakeoff).toFixed(1);
+
+            const marker = L.circleMarker([w.lat, w.lng], {
+              radius: 4.5,
+              fillColor: ptColor,
+              color: '#ffffff',
+              weight: 1.5,
+              fillOpacity: 1
+            }).addTo(flightLinesLayer);
+
+            marker.bindTooltip(`<b>WP #${idx + 1} (Foto #${idx + 1})</b><br/>Terreno: ${el}m s.n.m.<br/>Alt. Vuelo AGL: ${droneRelAlt}m`, {
+              permanent: false,
+              direction: 'top'
+            });
+          });
+        } else {
+          if (legendEl) legendEl.style.display = 'none';
+
+          const latlngs = gridWaypoints.map(w => L.latLng(w.lat, w.lng));
+          L.polyline(latlngs, {
+            color: '#ffd54f',
+            weight: 2.8,
+            opacity: 0.95
+          }).addTo(flightLinesLayer);
+
+          gridWaypoints.forEach((w, idx) => {
+            const marker = L.circleMarker([w.lat, w.lng], {
+              radius: 3.5,
+              fillColor: '#ffd54f',
+              color: '#1e293b',
+              weight: 1,
+              fillOpacity: 1
+            }).addTo(flightLinesLayer);
+
+            marker.bindTooltip(`<b>WP #${idx + 1} (Foto #${idx + 1})</b><br/>Altitud: ${AppState.altitude}m`, {
+              permanent: false,
+              direction: 'top'
+            });
+          });
+        }
+      }
+
+      let totalDist = 0;
+      for (let i = 0; i < gridWaypoints.length - 1; i++) {
+        totalDist += map.distance([gridWaypoints[i].lat, gridWaypoints[i].lng], [gridWaypoints[i+1].lat, gridWaypoints[i+1].lng]);
+      }
+      const timeSeconds = Math.round(totalDist / AppState.speed);
+      const mins = Math.floor(timeSeconds / 60);
+      const secs = (timeSeconds % 60).toString().padStart(2, '0');
+      const timeStr = `${mins}:${secs}`;
+      const distStr = `${(totalDist / 1000).toFixed(2)} km`;
+      
+      const areaM2 = computePolygonArea(AppState.points);
+      const areaHa = (areaM2 / 10000).toFixed(2);
+      const areaStr = `${areaHa} ha`;
+
+      updateStatDisplay(timeStr, distStr, areaStr, gridWaypoints.length, timeSeconds);
+    }
+
+    function getElevationColor(val, minVal, maxVal) {
+      if (maxVal <= minVal) return '#00e5ff';
+      const t = Math.max(0, Math.min(1, (val - minVal) / (maxVal - minVal)));
+      if (t < 0.25) {
+        const k = t / 0.25;
+        return interpolateRgb([0, 85, 255], [0, 229, 255], k);
+      } else if (t < 0.5) {
+        const k = (t - 0.25) / 0.25;
+        return interpolateRgb([0, 229, 255], [0, 230, 118], k);
+      } else if (t < 0.75) {
+        const k = (t - 0.5) / 0.25;
+        return interpolateRgb([0, 230, 118], [255, 214, 0], k);
+      } else {
+        const k = (t - 0.75) / 0.25;
+        return interpolateRgb([255, 214, 0], [255, 23, 68], k);
+      }
+    }
+
+    function interpolateRgb(c1, c2, factor) {
+      const r = Math.round(c1[0] + factor * (c2[0] - c1[0]));
+      const g = Math.round(c1[1] + factor * (c2[1] - c1[1]));
+      const b = Math.round(c1[2] + factor * (c2[2] - c1[2]));
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function updateStatDisplay(time, dist, area, wps, timeSeconds) {
+      document.getElementById('stat-time').textContent = time || '0:00';
+      document.getElementById('stat-distance').textContent = dist || '0.0 km';
+      document.getElementById('stat-area').textContent = area || '0.0 ha';
+      
+      const wpEl = document.getElementById('stat-waypoints');
+      if (wpEl) wpEl.textContent = `${wps} WP/Fotos`;
+
+      const batEl = document.getElementById('stat-batteries');
+      if (batEl) {
+        const secs = timeSeconds || 0;
+        const estBats = Math.max(1, Math.ceil(secs / (22 * 60)));
+        batEl.textContent = `${estBats} Batería${estBats > 1 ? 's' : ''} · Reanuda en corte`;
+      }
+
+      const pointsBadge = document.getElementById('map-points-badge');
+      if (pointsBadge && AppState.points.length >= 3) {
+        pointsBadge.textContent = `${AppState.points.length} puntos — ${wps} fotos calculadas`;
+      }
+    }
+
+    function computePolygonArea(pts) {
+      if (pts.length < 3) return 0;
+      let area = 0;
+      const R = 6378137;
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length;
+        const lat1 = pts[i].lat * Math.PI / 180;
+        const lat2 = pts[j].lat * Math.PI / 180;
+        const lon1 = pts[i].lng * Math.PI / 180;
+        const lon2 = pts[j].lng * Math.PI / 180;
+        area += (lon2 - lon1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+      }
+      return Math.abs(area * R * R / 2.0);
+    }
+
+    function generateTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters, angleDeg = 0) {
+      if (pts.length < 3) return [];
+      
+      const centroid = calculateCentroid(pts);
+      const cLat = centroid.lat;
+      const cLng = centroid.lng;
+      const latScale = 111320;
+      const lngScale = 111320 * Math.cos(cLat * Math.PI / 180);
+
+      // Convertir vértices a metros planos respecto al centroide
+      const localPts = pts.map(p => ({
+        x: (p.lng - cLng) * lngScale,
+        y: (p.lat - cLat) * latScale
+      }));
+
+      // Rotar polígono en ángulo inverso (-angleDeg)
+      const rad = (angleDeg * Math.PI) / 180;
+      const cosA = Math.cos(rad);
+      const sinA = Math.sin(rad);
+
+      const rotPts = localPts.map(p => ({
+        x: p.x * cosA + p.y * sinA,
+        y: -p.x * sinA + p.y * cosA
+      }));
+
+      let minY = Infinity, maxY = -Infinity;
+      rotPts.forEach(p => {
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      });
+
+      const waypoints = [];
+      let forward = true;
+
+      for (let y = minY + (lineSpacingMeters * 0.5); y <= maxY; y += lineSpacingMeters) {
+        const rowPts = [];
+        const xIntersections = [];
+
+        for (let i = 0; i < rotPts.length; i++) {
+          const p1 = rotPts[i];
+          const p2 = rotPts[(i + 1) % rotPts.length];
+          if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+            const x = p1.x + (y - p1.y) / (p2.y - p1.y) * (p2.x - p1.x);
+            xIntersections.push(x);
+          }
+        }
+        xIntersections.sort((a, b) => a - b);
+
+        for (let k = 0; k < xIntersections.length; k += 2) {
+          if (k + 1 < xIntersections.length) {
+            const x1 = xIntersections[k];
+            const x2 = xIntersections[k + 1];
+            const rowDist = Math.abs(x2 - x1);
+            const nSteps = Math.max(1, Math.round(rowDist / photoSpacingMeters));
+
+            for (let s = 0; s <= nSteps; s++) {
+              const fraction = s / nSteps;
+              const curX = x1 + fraction * (x2 - x1);
+              
+              // Rotar de vuelta al ángulo original (+angleDeg)
+              const origX = curX * cosA - y * sinA;
+              const origY = curX * sinA + y * cosA;
+
+              // Convertir de vuelta a LatLng
+              const ptLat = cLat + origY / latScale;
+              const ptLng = cLng + origX / lngScale;
+              rowPts.push({ lat: ptLat, lng: ptLng });
+            }
+          }
+        }
+
+        if (rowPts.length >= 2) {
+          if (!forward) rowPts.reverse();
+          waypoints.push(...rowPts);
+          forward = !forward;
+        }
+      }
+
+      return waypoints;
+    }
+
+    function generateCrossTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters, baseAngleDeg = 0) {
+      if (pts.length < 3) return [];
+      // Pase 1: Cuadrícula principal en baseAngleDeg
+      const pass1 = generateTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters, baseAngleDeg);
+      // Pase 2: Cuadrícula perpendicular en (baseAngleDeg + 90) % 360
+      const pass2 = generateTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters, (baseAngleDeg + 90) % 360);
+      return [...pass1, ...pass2];
+    }
+
+    function onGridAngleSlider(val) {
+      AppState.gridAngle = parseInt(val, 10) || 0;
+      const d1 = document.getElementById('disp-grid-angle');
+      if (d1) d1.textContent = `${AppState.gridAngle}°`;
+      const d2 = document.getElementById('disp-grid-angle-btn');
+      if (d2) d2.textContent = `${AppState.gridAngle}°`;
+      recalculateMission();
+    }
+
+    function adjustStep(type, delta) {
+      if (type === 'alt') {
+        AppState.altitude = Math.max(10, Math.min(250, AppState.altitude + delta));
+        document.getElementById('disp-alt').textContent = `${AppState.altitude.toFixed(1)} m`;
+      } else if (type === 'speed') {
+        AppState.speed = Math.max(1, Math.min(15, AppState.speed + delta));
+        const kmh = Math.round(AppState.speed * 3.6);
+        document.getElementById('disp-speed').textContent = `${AppState.speed.toFixed(1)} m/s (${kmh} km/h)`;
+      } else if (type === 'frontOverlap') {
+        AppState.frontOverlap = Math.max(50, Math.min(90, AppState.frontOverlap + delta));
+        document.getElementById('disp-front-overlap').textContent = `${AppState.frontOverlap}%`;
+      } else if (type === 'sideOverlap') {
+        AppState.sideOverlap = Math.max(40, Math.min(85, AppState.sideOverlap + delta));
+        document.getElementById('disp-side-overlap').textContent = `${AppState.sideOverlap}%`;
+      } else if (type === 'gimbal') {
+        AppState.gimbalPitch = Math.max(-90, Math.min(0, AppState.gimbalPitch + delta));
+        const nadir = AppState.gimbalPitch === -90 ? ' (Nadir)' : '';
+        document.getElementById('disp-gimbal').textContent = `${AppState.gimbalPitch.toFixed(1)}°${nadir}`;
+      } else if (type === 'gridAngle') {
+        AppState.gridAngle = (AppState.gridAngle + delta + 360) % 360;
+        const sl = document.getElementById('slider-grid-angle');
+        if (sl) sl.value = AppState.gridAngle;
+        const d1 = document.getElementById('disp-grid-angle');
+        if (d1) d1.textContent = `${AppState.gridAngle}°`;
+        const d2 = document.getElementById('disp-grid-angle-btn');
+        if (d2) d2.textContent = `${AppState.gridAngle}°`;
+      }
+      recalculateMission();
+    }
+
+    function setAltitudeMode(mode) {
+      AppState.altitudeMode = mode;
+      document.getElementById('btn-alt-takeoff').classList.toggle('active', mode === 'takeoff');
+      document.getElementById('btn-alt-ground').classList.toggle('active', mode === 'ground');
+      const demBox = document.getElementById('dem-box');
+      if (demBox) demBox.style.display = mode === 'ground' ? 'block' : 'none';
+      if (mode === 'ground' && !AppState.demLoaded && AppState.waylines.length > 0) {
+        fetchDemElevations();
+      }
+      recalculateMission();
+    }
+
+    async function fetchDemElevations() {
+      if (AppState.waylines.length === 0) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Dibuja un área primero en el mapa para descargar el DEM");
+        }
+        return;
+      }
+      
+      const statusEl = document.getElementById('disp-dem-status');
+      if (statusEl) {
+        statusEl.innerHTML = "⏳ Consultando modelo digital de elevación (Copernicus DEM 90m)...";
+        statusEl.style.color = "#1565c0";
+      }
+
+      try {
+        const centroid = calculateCentroid(AppState.points);
+        const pointsToQuery = [centroid, ...AppState.waylines];
+        
+        const chunkSize = 40;
+        const allElevations = [];
+        
+        for (let i = 0; i < pointsToQuery.length; i += chunkSize) {
+          const chunk = pointsToQuery.slice(i, i + chunkSize);
+          const lats = chunk.map(p => p.lat.toFixed(6)).join(',');
+          const lngs = chunk.map(p => p.lng.toFixed(6)).join(',');
+          const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`;
+          
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data && data.elevation) {
+            allElevations.push(...data.elevation);
+          }
+        }
+
+        if (allElevations.length > 0) {
+          AppState.takeoffElevation = Math.round(allElevations[0]);
+          AppState.waylinesElevations = allElevations.slice(1).map(e => Math.round(e * 10) / 10);
+          AppState.demLoaded = true;
+
+          const minE = Math.min(...AppState.waylinesElevations);
+          const maxE = Math.max(...AppState.waylinesElevations);
+          const diff = Math.round((maxE - minE) * 10) / 10;
+          
+          if (statusEl) {
+            statusEl.innerHTML = `✓ <b>DEM Activo:</b> Despegue: <b>${AppState.takeoffElevation}m s.n.m.</b> | Terreno: <b>${minE}m a ${maxE}m</b> (Desnivel: ±${diff}m)`;
+            statusEl.style.color = '#15803d';
+          }
+          
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast(`DEM descargado: Despegue a ${AppState.takeoffElevation}m s.n.m.`);
+          }
+
+          recalculateMission();
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerHTML = "⚠️ Sin conexión a internet para DEM. Se usará altitud estándar relativa.";
+          statusEl.style.color = '#b45309';
+        }
+      }
+    }
+
+    function setShutter(speed, elem) {
+      AppState.shutterSpeed = speed;
+      document.querySelectorAll('.shutter-chip').forEach(c => c.classList.remove('active'));
+      elem.classList.add('active');
+    }
+
+    function toggleAutoGrid(checked) {
+      AppState.autoGrid = checked;
+      document.getElementById('manual-grid-group').style.display = checked ? 'none' : 'flex';
+      recalculateMission();
+    }
+
+    function switchToView(viewName) {
+      if (viewName === 'map') {
+        document.getElementById('drawer-view-map').classList.add('active');
+        document.getElementById('drawer-view-config').classList.remove('active');
+        document.getElementById('export-screen').classList.remove('active');
+        document.getElementById('map-next-container').style.display = 'block';
+      } else if (viewName === 'config') {
+        document.getElementById('drawer-view-map').classList.remove('active');
+        document.getElementById('drawer-view-config').classList.add('active');
+        document.getElementById('export-screen').classList.remove('active');
+        document.getElementById('map-next-container').style.display = 'none';
+        recalculateMission();
+      } else if (viewName === 'export') {
+        document.getElementById('export-screen').classList.add('active');
+        refreshExportMissionsList();
+        refreshDjiSlots();
+      }
+    }
+
+    function closeExportScreen() {
+      document.getElementById('export-screen').classList.remove('active');
+    }
+
+    // Modal Helpers
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    function openSendToDjiFlyModal() {
+      openModal('modal-send-dji');
+      refreshDjiSlots();
+    }
+
+    function openSaveMissionModal() {
+      document.getElementById('save-mission-name-input').value = "Mision_" + new Date().toISOString().slice(5, 10);
+      openModal('modal-save-mission');
+    }
+
+    function confirmSaveMission() {
+      const name = document.getElementById('save-mission-name-input').value.trim() || 'Mision_1';
+      const mission = {
+        name: name,
+        date: new Date().toLocaleDateString(),
+        points: AppState.points.map(p => ({ lat: p.lat, lng: p.lng })),
+        altitude: AppState.altitude,
+        speed: AppState.speed,
+        camera: AppState.camera
+      };
+      AppState.savedMissions.push(mission);
+      localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      loadSavedMissionsFromStorage();
+      closeModal('modal-save-mission');
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast("Misión '" + name + "' guardada con éxito");
+      }
+    }
+
+    function openOfflineDownloadModal() { openModal('modal-offline-download'); }
+    function startOfflineDownload() {
+      closeModal('modal-offline-download');
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast("Descargando teselas satelitales en caché...");
+      }
+    }
+
+    function openMbtilesModal() { openModal('modal-mbtiles'); }
+    function openKmlImportModal() { openModal('modal-kml-import'); }
+
+    async function handleKmlFileSelected(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        let kmlText = '';
+        if (file.name.toLowerCase().endsWith('.kmz')) {
+          const zip = await JSZip.loadAsync(file);
+          const kmlFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.kml') || f.name.toLowerCase().endsWith('.wpml'));
+          if (!kmlFile) {
+            alert("No se encontró ningún archivo KML o WPML dentro del KMZ seleccionado.");
+            return;
+          }
+          kmlText = await kmlFile.async('text');
+        } else {
+          kmlText = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => resolve(ev.target.result);
+            reader.onerror = err => reject(err);
+            reader.readAsText(file);
+          });
+        }
+
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        const coordsElems = xmlDoc.querySelectorAll("coordinates");
+        const newPoints = [];
+
+        coordsElems.forEach(coordsElem => {
+          const rawCoords = coordsElem.textContent.trim().split(/\s+/);
+          rawCoords.forEach(str => {
+            const parts = str.split(",");
+            if (parts.length >= 2) {
+              const lng = parseFloat(parts[0]);
+              const lat = parseFloat(parts[1]);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                newPoints.push(L.latLng(lat, lng));
+              }
+            }
+          });
+        });
+
+        if (newPoints.length >= 3) {
+          if (newPoints.length > 3 && newPoints[0].equals(newPoints[newPoints.length - 1])) {
+            newPoints.pop();
+          }
+          AppState.points = newPoints;
+          AppState.demLoaded = false;
+          AppState.waylinesElevations = [];
+          renderBoundary();
+          recalculateMission();
+          map.fitBounds(L.latLngBounds(newPoints));
+          closeModal('modal-kml-import');
+
+          const wpCount = AppState.waylines.length;
+          const msg = `KML Cargado: ${newPoints.length} vértices | ${wpCount} waypoints calculados (${wpCount} fotos)`;
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast(msg);
+          } else {
+            alert(msg);
+          }
+        } else {
+          alert("El archivo KML/KMZ no contiene suficientes coordenadas válidas.");
+        }
+      } catch (err) {
+        alert("Error al procesar el archivo KML/KMZ: " + err.message);
+      }
+    }
+
+    let userLocationMarker = null;
+    let userAccuracyCircle = null;
+
+    function locateUserPosition(showMessage = true) {
+      let found = false;
+
+      const handleFoundCoords = (lat, lng, acc) => {
+        found = true;
+        if (!userLocationLayer) return;
+        userLocationLayer.clearLayers();
+
+        // Círculo de precisión semitransparente
+        userAccuracyCircle = L.circle([lat, lng], {
+          radius: acc || 20,
+          color: '#1565c0',
+          fillColor: '#42a5f5',
+          fillOpacity: 0.18,
+          weight: 1.5
+        }).addTo(userLocationLayer);
+
+        // Marcador distintivo de ubicación del usuario (Punto azul parpadeante con halo blanco)
+        const userIcon = L.divIcon({
+          className: 'user-gps-pulse-marker',
+          html: '<div class="user-gps-core"><div class="user-gps-pulse"></div></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        userLocationMarker = L.marker([lat, lng], { icon: userIcon }).addTo(userLocationLayer);
+        userLocationMarker.bindTooltip(
+          `<b>📍 Tu ubicación actual</b><br/>Lat: ${lat.toFixed(6)}<br/>Lng: ${lng.toFixed(6)}<br/>Precisión: ±${Math.round(acc)} m`,
+          { permanent: false, direction: 'top' }
+        );
+
+        map.setView([lat, lng], 18);
+
+        if (showMessage) {
+          const msg = `📍 Ubicación fijada: ${lat.toFixed(5)}, ${lng.toFixed(5)} (±${Math.round(acc)}m)`;
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast(msg);
+          }
+        }
+      };
+
+      // 1. Probar puente nativo de Android
+      if (window.AndroidBridge && window.AndroidBridge.getGpsLocation) {
+        try {
+          const res = window.AndroidBridge.getGpsLocation();
+          if (res && res.length > 5) {
+            const data = JSON.parse(res);
+            if (data && data.lat && data.lng) {
+              handleFoundCoords(data.lat, data.lng, data.accuracy || 15);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("GPS Bridge error:", e);
+        }
+      }
+
+      // 2. Geolocation estándar de HTML5 / WebView
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            handleFoundCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 15);
+          },
+          err => {
+            if (showMessage && !found) {
+              if (window.AndroidBridge && window.AndroidBridge.showToast) {
+                window.AndroidBridge.showToast("Buscando señal GPS... Asegúrate de tener activada la Ubicación en los ajustes del dispositivo.");
+              } else {
+                alert("No se pudo obtener la señal GPS actual. Por favor activa la ubicación.");
+              }
+            }
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+        );
+      } else if (showMessage && !found) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Geolocalización no soportada en este dispositivo.");
+        }
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    function toggleTerrainFollow() {
+      const btn = document.getElementById('btn-terr');
+      btn.classList.toggle('active');
+      const active = btn.classList.contains('active');
+      setAltitudeMode(active ? 'ground' : 'takeoff');
+    }
+
+    function loadSavedMissionsFromStorage() {
+      const data = localStorage.getItem('saved_missions');
+      if (data) {
+        try {
+          AppState.savedMissions = JSON.parse(data);
+        } catch (e) {
+          AppState.savedMissions = [];
+        }
+      }
+      renderMissionsList();
+    }
+
+    function renderMissionsList() {
+      const container = document.getElementById('missions-container');
+      const hint = document.getElementById('empty-missions-hint');
+      const countBadge = document.getElementById('saved-count-badge');
+      container.innerHTML = '';
+
+      if (AppState.savedMissions.length === 0) {
+        hint.style.display = 'block';
+        countBadge.textContent = '0 guardadas';
+        return;
+      }
+
+      hint.style.display = 'none';
+      countBadge.textContent = `${AppState.savedMissions.length} guardadas`;
+
+      AppState.savedMissions.forEach((m, idx) => {
+        const card = document.createElement('div');
+        card.className = 'mission-card';
+        card.innerHTML = `
+          <div class="mission-card-info" onclick="loadMission(${idx})">
+            <h4>${m.name}</h4>
+            <p>${m.points.length} puntos · ${m.date}</p>
+          </div>
+          <button class="mission-card-delete" onclick="deleteMission(${idx})">🗑️</button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function loadMission(idx) {
+      const m = AppState.savedMissions[idx];
+      if (!m) return;
+      AppState.points = m.points.map(p => L.latLng(p.lat, p.lng));
+      AppState.altitude = m.altitude || 80;
+      AppState.speed = m.speed || 8;
+      AppState.camera = m.camera || 'DJI_MINI_5_PRO';
+      renderBoundary();
+      recalculateMission();
+      switchToView('map');
+    }
+
+    function deleteMission(idx) {
+      AppState.savedMissions.splice(idx, 1);
+      localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      renderMissionsList();
+    }
+
+    function refreshDjiSlots() {
+      let slots = [];
+      if (window.AndroidBridge && window.AndroidBridge.getDjiWaypointSlots) {
+        try {
+          const jsonStr = window.AndroidBridge.getDjiWaypointSlots();
+          slots = JSON.parse(jsonStr);
+        } catch (e) {
+          slots = [];
+        }
+      }
+
+      // Si no hay slots de AndroidBridge (ej. navegador o puente en standby), usar los 11 slots del DJI RC 2
+      if (!slots || slots.length === 0) {
+        slots = [
+          { guid: "DF5F9C06-1155-4737-9376-B36B0DD6E9F8", name: "Slot DF5F9C06", lastModified: "2026-09-30 11:19", source: "sdcard" },
+          { guid: "087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", name: "Slot 087A9AFE", lastModified: "2026-08-22 18:44", source: "sdcard" },
+          { guid: "A73A8028-48C1-4FA9-9670-D30FD639AD1B", name: "Slot A73A8028", lastModified: "2026-08-22 18:42", source: "sdcard" },
+          { guid: "8F99B63E-F707-4453-B57F-C4E6FAE18B1F", name: "Slot 8F99B63E", lastModified: "2026-08-22 18:28", source: "sdcard" },
+          { guid: "F679F105-5936-4C75-B4D2-34AB49D51BCE", name: "Slot F679F105", lastModified: "2026-08-22 18:21", source: "sdcard" },
+          { guid: "1DBB6B29-0B1A-460C-A296-4BF5F146BA28", name: "Slot 1DBB6B29", lastModified: "2026-08-22 18:16", source: "sdcard" },
+          { guid: "EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", name: "Slot EA5FA18E", lastModified: "2026-08-22 17:57", source: "sdcard" },
+          { guid: "09E4DA39-1594-44A3-A1E9-890E731ED678", name: "Slot 09E4DA39", lastModified: "2026-08-22 17:51", source: "sdcard" },
+          { guid: "E1E5C00D-1B0E-4175-ACB3-F152BA208768", name: "Slot E1E5C00D", lastModified: "2026-08-22 17:40", source: "sdcard" },
+          { guid: "5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", name: "Slot 5A8E7050", lastModified: "2026-08-22 17:34", source: "sdcard" },
+          { guid: "D378CA50-5D87-41B1-B126-045C20BA5816", name: "Slot D378CA50", lastModified: "2026-08-22 17:29", source: "sdcard" }
+        ];
+      }
+
+      if (slots.length > 0 && !AppState.activeSlotGuid) {
+        AppState.activeSlotGuid = slots[0].guid;
+      }
+
+      const modalContainer = document.getElementById('modal-slots-list');
+      const exportContainer = document.getElementById('dji-slots-container');
+      
+      const renderSlotsHtml = (container) => {
+        container.innerHTML = '';
+        if (slots.length === 0) {
+          container.innerHTML = `
+            <div style="padding: 16px; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; color: #991b1b; font-size: 0.85rem; text-align: center;">
+              <strong>Sin slots detectados en el control</strong><br/>
+              Asegúrate de que el DJI RC 2 esté conectado por USB (Litchi Hub Bridge activo) o que la Tarjeta SD esté insertada.<br/>
+              <button class="btn-refresh" style="margin-top: 8px; padding: 4px 10px; font-size: 0.8rem; background: #fff; border: 1px solid #dc2626; border-radius: 4px; cursor: pointer;" onclick="refreshDjiSlots()">↻ Reintentar Escaneo</button>
+            </div>
+          `;
+          return;
+        }
+
+        slots.forEach((s) => {
+          const isSelected = (s.guid === AppState.activeSlotGuid);
+          const isSd = s.source === 'sdcard' || s.name.includes('[Tarjeta SD]');
+          const isBridge = s.source === 'litchi_bridge';
+          const badgeColor = isSd ? '#059669' : (isBridge ? '#0284c7' : '#d97706');
+          const badgeBg = isSd ? '#ecfdf5' : (isBridge ? '#e0f2fe' : '#fffbeb');
+          const badgeText = isSd ? 'SD Card' : (isBridge ? 'RC 2 · Litchi Bridge' : 'Interna');
+
+          const item = document.createElement('div');
+          item.className = 'slot-item' + (isSelected ? ' selected' : '');
+          item.innerHTML = `
+            <div class="slot-item-info" style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                <h5 style="margin: 0; font-size: 0.95rem; font-weight: 700;">${s.name.replace(/\[.*?\]/g, '').trim()}</h5>
+                <span style="font-size: 0.68rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}40;">${badgeText}</span>
+              </div>
+              <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted);">ID: ${s.guid} ${s.lastModified ? '· ' + s.lastModified : ''}</p>
+            </div>
+            <span style="color: var(--primary); font-weight: 800; font-size: 1.1rem;">${isSelected ? '✓' : ''}</span>
+          `;
+          item.onclick = () => {
+            AppState.activeSlotGuid = s.guid;
+            refreshDjiSlots();
+          };
+          container.appendChild(item);
+        });
+      };
+
+      if (modalContainer) renderSlotsHtml(modalContainer);
+      if (exportContainer) renderSlotsHtml(exportContainer);
+    }
+
+    function refreshExportMissionsList() {
+      const container = document.getElementById('export-missions-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const currentItem = document.createElement('div');
+      currentItem.className = 'slot-item selected';
+      const curNameInput = document.getElementById('save-mission-name-input');
+      const curName = (curNameInput && curNameInput.value.trim()) || 'mision_actual';
+      currentItem.innerHTML = `
+        <div class="slot-item-info">
+          <h5>${curName} (actual)</h5>
+          <p>${AppState.points.length} puntos · ${AppState.waylines.length} waypoints</p>
+        </div>
+        <span style="color: var(--primary); font-weight: 800;">✓</span>
+      `;
+      currentItem.onclick = () => {
+        document.querySelectorAll('#export-missions-list .slot-item').forEach(el => el.classList.remove('selected'));
+        currentItem.classList.add('selected');
+        document.getElementById('export-filename').value = curName;
+      };
+      container.appendChild(currentItem);
+
+      AppState.savedMissions.forEach((m, idx) => {
+        const item = document.createElement('div');
+        item.className = 'slot-item';
+        item.innerHTML = `
+          <div class="slot-item-info">
+            <h5>${m.name}</h5>
+            <p>${m.points.length} puntos · ${m.date}</p>
+          </div>
+          <span style="color: var(--text-muted); font-size: 0.8rem;">Cargar</span>
+        `;
+        item.onclick = () => {
+          loadMission(idx);
+          document.querySelectorAll('#export-missions-list .slot-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          document.getElementById('export-filename').value = m.name;
+        };
+        container.appendChild(item);
+      });
+    }
+
+    async function buildDjiKmzBlob(missionName) {
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+      const zip = new JSZip();
+      const wpmz = zip.folder("wpmz");
+
+      let totalDist = 0;
+      for (let i = 0; i < AppState.waylines.length - 1; i++) {
+        totalDist += map.distance([AppState.waylines[i].lat, AppState.waylines[i].lng], [AppState.waylines[i+1].lat, AppState.waylines[i+1].lng]);
+      }
+      const timeSeconds = Math.round(totalDist / (AppState.speed || 8));
+
+      const finishAction = AppState.finishAction || 'goHome';
+      const lostAction = AppState.signalLossAction || 'continue';
+      const exitOnRCLost = lostAction === 'continue' ? 'executeLostAction' : 'goBack';
+      const executeRCLostAction = lostAction === 'continue' ? 'continue' : (lostAction === 'hover' ? 'hover' : 'goBack');
+      const turnMode = AppState.turnMode || 'toPointAndPassWithContinuityCurvature';
+      const headingMode = AppState.headingMode || 'smoothTransition';
+
+      const templateKml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:wpml="http://www.dji.com/wpmz/1.0.6">
+  <Document>
+    <wpml:author>dronmxE - Edgar</wpml:author>
+    <wpml:createTime>${Date.now()}</wpml:createTime>
+    <wpml:updateTime>${Date.now()}</wpml:updateTime>
+    <wpml:missionConfig>
+      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
+      <wpml:finishAction>${finishAction}</wpml:finishAction>
+      <wpml:exitOnRCLost>${exitOnRCLost}</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>${executeRCLostAction}</wpml:executeRCLostAction>
+      <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
+      <wpml:droneInfo>
+        <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
+        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>
+      </wpml:droneInfo>
+    </wpml:missionConfig>
+  </Document>
+</kml>`;
+
+      let placemarks = '';
+      AppState.waylines.forEach((wp, idx) => {
+        let execHeight = AppState.altitude;
+        if (AppState.altitudeMode === 'ground' && AppState.demLoaded && AppState.waylinesElevations && AppState.waylinesElevations[idx] !== undefined) {
+          const deltaZ = AppState.waylinesElevations[idx] - (AppState.takeoffElevation || AppState.waylinesElevations[0]);
+          execHeight = Math.max(5, AppState.altitude + deltaZ);
+        }
+
+        let headingAngle = 0;
+        if (idx < AppState.waylines.length - 1) {
+          const next = AppState.waylines[idx + 1];
+          const dLng = (next.lng - wp.lng) * Math.PI / 180;
+          const lat1 = wp.lat * Math.PI / 180;
+          const lat2 = next.lat * Math.PI / 180;
+          const y = Math.sin(dLng) * Math.cos(lat2);
+          const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+          headingAngle = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+          if (headingAngle > 180) headingAngle -= 360;
+        }
+
+        placemarks += `
+      <Placemark>
+        <Point>
+          <coordinates>${wp.lng.toFixed(7)},${wp.lat.toFixed(7)}</coordinates>
+        </Point>
+        <wpml:index>${idx}</wpml:index>
+        <wpml:executeHeight>${execHeight.toFixed(2)}</wpml:executeHeight>
+        <wpml:waypointSpeed>${AppState.speed}</wpml:waypointSpeed>
+        <wpml:waypointHeadingParam>
+          <wpml:waypointHeadingMode>${headingMode}</wpml:waypointHeadingMode>
+          <wpml:waypointHeadingAngle>${headingAngle.toFixed(2)}</wpml:waypointHeadingAngle>
+          <wpml:waypointPoiPoint>0.000000,0.000000,0.000000</wpml:waypointPoiPoint>
+          <wpml:waypointHeadingAngleEnable>1</wpml:waypointHeadingAngleEnable>
+          <wpml:waypointHeadingPathMode>followBadArc</wpml:waypointHeadingPathMode>
+          <wpml:waypointHeadingPoiIndex>0</wpml:waypointHeadingPoiIndex>
+        </wpml:waypointHeadingParam>
+        <wpml:waypointTurnParam>
+          <wpml:waypointTurnMode>${turnMode}</wpml:waypointTurnMode>
+          <wpml:waypointTurnDampingDist>0</wpml:waypointTurnDampingDist>
+        </wpml:waypointTurnParam>
+        <wpml:useStraightLine>0</wpml:useStraightLine>
+        <wpml:actionGroup>
+          <wpml:actionGroupId>${idx + 1}</wpml:actionGroupId>
+          <wpml:actionGroupStartIndex>${idx}</wpml:actionGroupStartIndex>
+          <wpml:actionGroupEndIndex>${idx}</wpml:actionGroupEndIndex>
+          <wpml:actionGroupMode>parallel</wpml:actionGroupMode>
+          <wpml:actionTrigger>
+            <wpml:actionTriggerType>reachPoint</wpml:actionTriggerType>
+          </wpml:actionTrigger>
+          <wpml:action>
+            <wpml:actionId>1</wpml:actionId>
+            <wpml:actionActuatorFunc>gimbalRotate</wpml:actionActuatorFunc>
+            <wpml:actionActuatorFuncParam>
+              <wpml:gimbalHeadingYawBase>aircraft</wpml:gimbalHeadingYawBase>
+              <wpml:gimbalRotateMode>absoluteAngle</wpml:gimbalRotateMode>
+              <wpml:gimbalPitchRotateEnable>1</wpml:gimbalPitchRotateEnable>
+              <wpml:gimbalPitchRotateAngle>${AppState.gimbalPitch}</wpml:gimbalPitchRotateAngle>
+              <wpml:gimbalRollRotateEnable>0</wpml:gimbalRollRotateEnable>
+              <wpml:gimbalRollRotateAngle>0</wpml:gimbalRollRotateAngle>
+              <wpml:gimbalYawRotateEnable>0</wpml:gimbalYawRotateEnable>
+              <wpml:gimbalYawRotateAngle>0</wpml:gimbalYawRotateAngle>
+              <wpml:gimbalRotateTimeEnable>0</wpml:gimbalRotateTimeEnable>
+              <wpml:gimbalRotateTime>0</wpml:gimbalRotateTime>
+              <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
+            </wpml:actionActuatorFuncParam>
+          </wpml:action>
+          <wpml:action>
+            <wpml:actionId>2</wpml:actionId>
+            <wpml:actionActuatorFunc>takePhoto</wpml:actionActuatorFunc>
+            <wpml:actionActuatorFuncParam>
+              <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
+              <wpml:useGlobalPayloadLensIndex>1</wpml:useGlobalPayloadLensIndex>
+            </wpml:actionActuatorFuncParam>
+          </wpml:action>
+        </wpml:actionGroup>
+      </Placemark>`;
+      });
+
+      const waylinesWpml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:wpml="http://www.dji.com/wpmz/1.0.6">
+  <Document>
+    <wpml:missionConfig>
+      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
+      <wpml:finishAction>${finishAction}</wpml:finishAction>
+      <wpml:exitOnRCLost>${exitOnRCLost}</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>${executeRCLostAction}</wpml:executeRCLostAction>
+      <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
+      <wpml:droneInfo>
+        <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
+      </wpml:droneInfo>
+    </wpml:missionConfig>
+    <Folder>
+      <wpml:templateId>0</wpml:templateId>
+      <wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>
+      <wpml:waylineId>0</wpml:waylineId>
+      <wpml:distance>${Math.round(totalDist)}</wpml:distance>
+      <wpml:duration>${timeSeconds}</wpml:duration>
+      <wpml:autoFlightSpeed>${AppState.speed}</wpml:autoFlightSpeed>
+      ${placemarks}
+    </Folder>
+  </Document>
+</kml>`;
+
+      wpmz.file("template.kml", templateKml);
+      wpmz.file("waylines.wpml", waylinesWpml);
+
+      return await zip.generateAsync({ type: "base64" });
+    }
+
+    async function saveKmzToDownloads() {
+      const fileNameInput = document.getElementById('export-filename');
+      const fileName = (fileNameInput && fileNameInput.value.trim()) || 'mision_fotogrametria';
+      const base64Data = await buildDjiKmzBlob(fileName);
+
+      if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
+        window.AndroidBridge.saveKmzMission(base64Data, fileName, "");
+      } else {
+        const blob = await fetch(`data:application/vnd.google-earth.kmz;base64,${base64Data}`).then(r => r.blob());
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName}.kmz`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    async function shareKmzMission() {
+      const fileNameInput = document.getElementById('export-filename');
+      const fileName = (fileNameInput && fileNameInput.value.trim()) || 'mision_fotogrametria';
+      const base64Data = await buildDjiKmzBlob(fileName);
+
+      if (window.AndroidBridge && window.AndroidBridge.shareKmz) {
+        window.AndroidBridge.shareKmz(base64Data, fileName);
+      } else if (navigator.share) {
+        try {
+          const blob = await fetch(`data:application/vnd.google-earth.kmz;base64,${base64Data}`).then(r => r.blob());
+          const file = new File([blob], `${fileName}.kmz`, { type: 'application/vnd.google-earth.kmz' });
+          await navigator.share({
+            title: `Misión ${fileName}`,
+            text: 'Misión fotogramétrica generada en dronmxE.',
+            files: [file]
+          });
+        } catch (e) {
+          saveKmzToDownloads();
+        }
+      } else {
+        saveKmzToDownloads();
+      }
+    }
+
+    async function executeDjiInjection() {
+      const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
+      const slot = AppState.activeSlotGuid;
+      const base64Data = await buildDjiKmzBlob(fileName);
+
+      if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
+        window.AndroidBridge.saveKmzMission(base64Data, fileName, slot);
+        closeModal('modal-send-dji');
+      } else {
+        closeModal('modal-send-dji');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+  </script>
+</body>
+</html>
