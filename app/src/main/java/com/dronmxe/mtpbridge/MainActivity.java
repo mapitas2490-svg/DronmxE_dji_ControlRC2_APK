@@ -297,12 +297,16 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     }
                     obj.put("tag", tag);
 
-                    // Read first 3MB base64 for waypoint preview parser
+                    // Read first 3.5MB base64 for waypoint preview parser
                     if (f.length() < 3500000) {
-                        try (FileInputStream fis = new FileInputStream(f)) {
-                            byte[] data = new byte[(int) f.length()];
-                            fis.read(data);
-                            obj.put("base64", Base64.encodeToString(data, Base64.NO_WRAP));
+                        try (FileInputStream fis = new FileInputStream(f);
+                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+                            byte[] buffer = new byte[8192];
+                            int bytesRead;
+                            while ((bytesRead = fis.read(buffer)) != -1) {
+                                baos.write(buffer, 0, bytesRead);
+                            }
+                            obj.put("base64", Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP));
                         } catch (Exception ignored) {}
                     }
                     arr.put(obj);

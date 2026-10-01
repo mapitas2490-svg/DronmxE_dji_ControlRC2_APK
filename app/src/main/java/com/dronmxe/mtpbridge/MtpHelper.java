@@ -104,6 +104,7 @@ public class MtpHelper {
     }
 
     public void findAndConnectDevice() {
+        close();
         HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
         if (deviceList.isEmpty()) {
             callback.onLog("[INFO] No se detecta ningún dispositivo USB OTG conectado.");
