@@ -15,14 +15,17 @@ import android.mtp.MtpObjectInfo;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class MtpHelper {
 
@@ -40,7 +43,18 @@ public class MtpHelper {
     private final LogCallback callback;
     private UsbDevice currentDevice;
     private MtpDevice mtpDevice;
-    private boolean permissionRequested = false;
+
+    // Candidate directory paths for DJI Fly waypoint missions across different versions & storage
+    private static final String[][] WAYPOINT_PATH_CANDIDATES = new String[][]{
+            {"Android", "data", "dji.go.v5", "files", "waypoint"},
+            {"Android", "data", "dji.go.v5", "files", "waylines"},
+            {"Android", "data", "dji.go.v5", "files", "waypoint_v2"},
+            {"Android", "data", "dji.go.v5", "files", "DJI", "waypoint"},
+            {"DJI", "dji.go.v5", "files", "waypoint"},
+            {"DJI", "waypoint"},
+            {"dji.go.v5", "files", "waypoint"},
+            {"Download"}
+    };
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -189,8 +203,9 @@ public class MtpHelper {
         public long dateModified = 0;
         public long size = 0;
         public int kmzHandle = -1;
+        public int folderHandle = -1;
+        public int storageId = 0;
         public int wpCount = 0;
-        public String kmzBase64 = "";
     }
 
     private static class KmzParsedInfo {
@@ -199,8 +214,62 @@ public class MtpHelper {
         long updateTime = 0;
     }
 
-    /** Count Placemarks, extract mission name and updateTime inside a KMZ byte array. */
+    private KmzParsedInfo parseXmlContent(String xml) {
+        KmzParsedInfo info = new KmzParsedInfo();
+        if (xml == null || xml.isEmpty()) return info;
+
+        // Extract updateTime
+        java.util.regex.Pattern pUt = java.util.regex.Pattern.compile("<wpml:updateTime>\\s*(\\d+)\\s*</wpml:updateTime>", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher mUt = pUt.matcher(xml);
+        if (mUt.find()) {
+            try {
+                long ut = Long.parseLong(mUt.group(1));
+                if (ut > 0) info.updateTime = ut;
+            } catch (Exception ignored) {}
+        }
+
+        // Extract missionName from <wpml:missionName>
+        java.util.regex.Pattern pNm = java.util.regex.Pattern.compile("<wpml:missionName>\\s*(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?\\s*</wpml:missionName>", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
+        java.util.regex.Matcher mNm = pNm.matcher(xml);
+        if (mNm.find()) {
+            String nameStr = mNm.group(1).trim();
+            if (!nameStr.isEmpty() && !nameStr.toLowerCase().endsWith(".kml") && !nameStr.toLowerCase().endsWith(".wpml")) {
+                info.missionName = nameStr;
+            }
+        }
+
+        // Fallback to <name>
+        if (info.missionName.isEmpty()) {
+            java.util.regex.Pattern pNm2 = java.util.regex.Pattern.compile("<name>\\s*(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?\\s*</name>", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
+            java.util.regex.Matcher mNm2 = pNm2.matcher(xml);
+            while (mNm2.find()) {
+                String nameStr = mNm2.group(1).trim();
+                if (!nameStr.isEmpty() && !nameStr.toLowerCase().endsWith(".kml") && !nameStr.toLowerCase().endsWith(".wpml") && !nameStr.equalsIgnoreCase("wpmz") && !nameStr.equalsIgnoreCase("waylines") && !nameStr.equalsIgnoreCase("waypoint")) {
+                    info.missionName = nameStr;
+                    break;
+                }
+            }
+        }
+
+        // Count Placemarks
+        int count = 0, idx = 0;
+        while ((idx = xml.indexOf("<Placemark", idx)) != -1) { count++; idx += 10; }
+        info.wpCount = count;
+
+        return info;
+    }
+
     private KmzParsedInfo parseKmzInfo(byte[] kmzData) {
+        if (kmzData == null || kmzData.length == 0) return new KmzParsedInfo();
+
+        // First check if raw XML string
+        try {
+            String headerStr = new String(kmzData, 0, Math.min(kmzData.length, 256), "UTF-8");
+            if (headerStr.contains("<?xml") || headerStr.contains("<kml") || headerStr.contains("<wpml")) {
+                return parseXmlContent(new String(kmzData, "UTF-8"));
+            }
+        } catch (Exception ignored) {}
+
         KmzParsedInfo info = new KmzParsedInfo();
         try {
             ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(kmzData));
@@ -213,49 +282,11 @@ public class MtpHelper {
                     int r;
                     while ((r = zis.read(buf)) != -1) baos.write(buf, 0, r);
                     String xml = baos.toString("UTF-8");
-
-                    // Extract updateTime
-                    if (info.updateTime == 0) {
-                        java.util.regex.Pattern pUt = java.util.regex.Pattern.compile("<wpml:updateTime>\\s*(\\d+)\\s*</wpml:updateTime>", java.util.regex.Pattern.CASE_INSENSITIVE);
-                        java.util.regex.Matcher mUt = pUt.matcher(xml);
-                        if (mUt.find()) {
-                            try {
-                                long ut = Long.parseLong(mUt.group(1));
-                                if (ut > 0) info.updateTime = ut;
-                            } catch (Exception ignored) {}
-                        }
-                    }
-
-                    // Extract missionName from <wpml:missionName>...</wpml:missionName>
-                    if (info.missionName.isEmpty()) {
-                        java.util.regex.Pattern pNm = java.util.regex.Pattern.compile("<wpml:missionName>\\s*(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?\\s*</wpml:missionName>", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
-                        java.util.regex.Matcher mNm = pNm.matcher(xml);
-                        if (mNm.find()) {
-                            String nameStr = mNm.group(1).trim();
-                            if (!nameStr.isEmpty() && !nameStr.toLowerCase().endsWith(".kml") && !nameStr.toLowerCase().endsWith(".wpml")) {
-                                info.missionName = nameStr;
-                            }
-                        }
-                    }
-
-                    // Fallback to <name>...</name> if wpml:missionName wasn't found
-                    if (info.missionName.isEmpty()) {
-                        java.util.regex.Pattern pNm2 = java.util.regex.Pattern.compile("<name>\\s*(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?\\s*</name>", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
-                        java.util.regex.Matcher mNm2 = pNm2.matcher(xml);
-                        while (mNm2.find()) {
-                            String nameStr = mNm2.group(1).trim();
-                            if (!nameStr.isEmpty() && !nameStr.toLowerCase().endsWith(".kml") && !nameStr.toLowerCase().endsWith(".wpml") && !nameStr.equalsIgnoreCase("wpmz") && !nameStr.equalsIgnoreCase("waylines")) {
-                                info.missionName = nameStr;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Count <Placemark occurrences
-                    int count = 0, idx = 0;
-                    while ((idx = xml.indexOf("<Placemark", idx)) != -1) { count++; idx += 10; }
-                    if (count > 0 && info.wpCount == 0) {
-                        info.wpCount = count;
+                    KmzParsedInfo sub = parseXmlContent(xml);
+                    if (sub.wpCount > 0) info.wpCount = Math.max(info.wpCount, sub.wpCount);
+                    if (sub.updateTime > 0 && info.updateTime == 0) info.updateTime = sub.updateTime;
+                    if (sub.missionName != null && !sub.missionName.isEmpty() && info.missionName.isEmpty()) {
+                        info.missionName = sub.missionName;
                     }
                 }
                 zis.closeEntry();
@@ -264,6 +295,27 @@ public class MtpHelper {
         return info;
     }
 
+    private int findHandleForPath(int storageId, String[] pathParts) {
+        if (mtpDevice == null) return -1;
+        int currentHandle = 0;
+        for (String part : pathParts) {
+            int foundHandle = -1;
+            int[] children = mtpDevice.getObjectHandles(storageId, 0, currentHandle);
+            if (children == null) return -1;
+            for (int handle : children) {
+                MtpObjectInfo info = mtpDevice.getObjectInfo(handle);
+                if (info != null && part.equalsIgnoreCase(info.getName())) {
+                    foundHandle = handle;
+                    break;
+                }
+            }
+            if (foundHandle == -1) return -1;
+            currentHandle = foundHandle;
+        }
+        return currentHandle;
+    }
+
+    /** Deep scan across ALL storage volumes (Internal & SD Card) and ALL potential DJI Fly waypoint paths. */
     public List<DeviceSlotInfo> getDeviceSlotsDetailed() {
         List<DeviceSlotInfo> slots = new ArrayList<>();
         if (mtpDevice == null) {
@@ -273,43 +325,64 @@ public class MtpHelper {
 
         try {
             int[] storageIds = mtpDevice.getStorageIds();
-            if (storageIds == null || storageIds.length == 0) return slots;
-
-            int primaryStorage = storageIds[0];
-            int waypointHandle = navigateToWaypointFolder(primaryStorage);
-            if (waypointHandle == -1) {
-                callback.onLog("[WARN] No se encontró la carpeta de waypoints en DJI Fly.");
+            if (storageIds == null || storageIds.length == 0) {
+                callback.onLog("[WARN] No se detectaron volúmenes de almacenamiento en RC 2.");
                 return slots;
             }
 
-            int[] children = mtpDevice.getObjectHandles(primaryStorage, 0, waypointHandle);
-            if (children != null) {
-                for (int handle : children) {
-                    MtpObjectInfo info = mtpDevice.getObjectInfo(handle);
-                    if (info != null && (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0)) {
-                        DeviceSlotInfo slot = new DeviceSlotInfo();
-                        slot.guid = info.getName();
-                        slot.dateModified = info.getDateModified() > 0 ? (info.getDateModified() * 1000L) : System.currentTimeMillis();
+            Set<String> seenGuids = new HashSet<>();
 
-                        // Search for the KMZ file inside this slot folder
-                        int[] subFiles = mtpDevice.getObjectHandles(primaryStorage, 0, handle);
-                        if (subFiles != null) {
+            for (int storageId : storageIds) {
+                callback.onLog(String.format("[DEEP SCAN] Escaneando almacenamiento MTP 0x%08X...", storageId));
+
+                for (String[] pathParts : WAYPOINT_PATH_CANDIDATES) {
+                    int parentHandle = findHandleForPath(storageId, pathParts);
+                    if (parentHandle == -1) continue;
+
+                    String fullPathStr = String.join("/", pathParts);
+                    int[] items = mtpDevice.getObjectHandles(storageId, 0, parentHandle);
+                    if (items == null || items.length == 0) continue;
+
+                    for (int handle : items) {
+                        MtpObjectInfo info = mtpDevice.getObjectInfo(handle);
+                        if (info == null) continue;
+
+                        String itemName = info.getName();
+                        if (itemName == null || itemName.isEmpty()) continue;
+
+                        // Case A: Item is a directory (GUID folder or mission folder)
+                        boolean isFolder = (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0);
+                        if (isFolder) {
+                            String guid = itemName;
+                            if (seenGuids.contains(guid.toLowerCase())) continue;
+
+                            int[] subFiles = mtpDevice.getObjectHandles(storageId, 0, handle);
+                            if (subFiles == null || subFiles.length == 0) continue;
+
+                            DeviceSlotInfo slot = new DeviceSlotInfo();
+                            slot.guid = guid;
+                            slot.folderHandle = handle;
+                            slot.storageId = storageId;
+                            slot.dateModified = info.getDateModified() > 0 ? (info.getDateModified() * 1000L) : System.currentTimeMillis();
+
                             for (int fh : subFiles) {
                                 MtpObjectInfo fi = mtpDevice.getObjectInfo(fh);
-                                if (fi != null && fi.getName().toLowerCase().endsWith(".kmz")) {
+                                if (fi == null) continue;
+
+                                String fname = fi.getName() != null ? fi.getName().toLowerCase() : "";
+                                if (fname.endsWith(".kmz") || fname.endsWith(".kml") || fname.endsWith(".wpml")) {
                                     slot.kmzHandle = fh;
                                     slot.size = fi.getCompressedSize();
                                     if (fi.getDateModified() > 0) {
                                         slot.dateModified = fi.getDateModified() * 1000L;
                                     }
-                                    if (fi.getName() != null && !fi.getName().endsWith(".kmz")) {
-                                        slot.displayName = fi.getName();
-                                    }
-                                    // Read KMZ to parse WP & name (limit 2MB)
-                                    if (slot.size > 0 && slot.size < 2000000) {
+
+                                    // Read byte content for WP & mission name extraction (limit 15MB)
+                                    long sizeToRead = slot.size > 0 ? slot.size : 524288;
+                                    if (sizeToRead < 15000000) {
                                         try {
-                                            byte[] data = mtpDevice.getObject(fh, (int) slot.size);
-                                            if (data != null) {
+                                            byte[] data = mtpDevice.getObject(fh, (int) sizeToRead);
+                                            if (data != null && data.length > 0) {
                                                 KmzParsedInfo parsed = parseKmzInfo(data);
                                                 slot.wpCount = parsed.wpCount;
                                                 if (parsed.updateTime > 0) {
@@ -320,31 +393,66 @@ public class MtpHelper {
                                                 }
                                             }
                                         } catch (Exception ex) {
-                                            callback.onLog("[WARN] No se pudo leer KMZ para WP: " + ex.getMessage());
+                                            callback.onLog("[WARN] No se pudo parsear " + fname + ": " + ex.getMessage());
                                         }
                                     }
-                                    break;
+                                    if (fname.endsWith(".kmz")) break;
                                 }
                             }
+
+                            if (slot.kmzHandle != -1 || slot.wpCount > 0) {
+                                seenGuids.add(guid.toLowerCase());
+                                if (slot.displayName.isEmpty()) slot.displayName = slot.guid;
+                                slots.add(slot);
+                                callback.onLog(String.format("[MISION RC2] %s | Ruta: %s | WP: %d | Tamaño: %d KB",
+                                        slot.displayName, fullPathStr, slot.wpCount, slot.size / 1024));
+                            }
                         }
-                        if (slot.kmzHandle != -1) {
+                        // Case B: Item is a direct .kmz file in waypoint folder
+                        else if (itemName.toLowerCase().endsWith(".kmz")) {
+                            String guid = itemName.substring(0, itemName.length() - 4);
+                            if (seenGuids.contains(guid.toLowerCase())) continue;
+
+                            DeviceSlotInfo slot = new DeviceSlotInfo();
+                            slot.guid = guid;
+                            slot.displayName = guid;
+                            slot.kmzHandle = handle;
+                            slot.folderHandle = parentHandle;
+                            slot.storageId = storageId;
+                            slot.size = info.getCompressedSize();
+                            slot.dateModified = info.getDateModified() > 0 ? (info.getDateModified() * 1000L) : System.currentTimeMillis();
+
+                            long sizeToRead = slot.size > 0 ? slot.size : 524288;
+                            if (sizeToRead < 15000000) {
+                                try {
+                                    byte[] data = mtpDevice.getObject(handle, (int) sizeToRead);
+                                    if (data != null && data.length > 0) {
+                                        KmzParsedInfo parsed = parseKmzInfo(data);
+                                        slot.wpCount = parsed.wpCount;
+                                        if (parsed.updateTime > 0) slot.dateModified = parsed.updateTime;
+                                        if (parsed.missionName != null && !parsed.missionName.isEmpty()) {
+                                            slot.displayName = parsed.missionName;
+                                        }
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                            seenGuids.add(guid.toLowerCase());
                             slots.add(slot);
-                            callback.onLog(String.format("[SLOT RC2] %s | WP: %d | Size: %d KB",
-                                    slot.displayName.isEmpty() ? slot.guid : slot.displayName, slot.wpCount, slot.size / 1024));
+                            callback.onLog(String.format("[KMZ DIRECTO RC2] %s | Ruta: %s | WP: %d",
+                                    slot.displayName, fullPathStr, slot.wpCount));
                         }
                     }
                 }
             }
-            // Sort slots by dateModified descending (most recent first)
-            java.util.Collections.sort(slots, (a, b) -> Long.compare(b.dateModified, a.dateModified));
-            callback.onLog("[OK] Ranuras de misión encontradas en RC 2: " + slots.size());
+
+            Collections.sort(slots, (a, b) -> Long.compare(b.dateModified, a.dateModified));
+            callback.onLog("[OK] Misiones reales encontradas en RC 2: " + slots.size());
         } catch (Exception e) {
-            callback.onLog("[ERROR] Error escaneando ranuras detalladas: " + e.getMessage());
+            callback.onLog("[ERROR] Excepción escaneando misiones profundamente: " + e.getMessage());
         }
         return slots;
     }
 
-    /** Scan the RC2's Download folder via MTP and return KMZ files found there. */
     public static class RemoteKmzFile {
         public String name = "";
         public long size = 0;
@@ -359,42 +467,28 @@ public class MtpHelper {
         try {
             int[] storageIds = mtpDevice.getStorageIds();
             if (storageIds == null || storageIds.length == 0) return result;
-            int primaryStorage = storageIds[0];
 
-            // Navigate to Download folder on RC2
-            String[] downloadPath = new String[]{"Download"};
-            int currentHandle = 0;
-            for (String part : downloadPath) {
-                int found = -1;
-                int[] kids = mtpDevice.getObjectHandles(primaryStorage, 0, currentHandle);
-                if (kids == null) return result;
-                for (int h : kids) {
-                    MtpObjectInfo i = mtpDevice.getObjectInfo(h);
-                    if (i != null && part.equalsIgnoreCase(i.getName())) {
-                        found = h; break;
-                    }
-                }
-                if (found == -1) return result;
-                currentHandle = found;
-            }
+            for (int storageId : storageIds) {
+                int downloadHandle = findHandleForPath(storageId, new String[]{"Download"});
+                if (downloadHandle == -1) continue;
 
-            // List KMZ files in Download
-            int[] files = mtpDevice.getObjectHandles(primaryStorage, 0, currentHandle);
-            if (files != null) {
-                for (int fh : files) {
-                    MtpObjectInfo fi = mtpDevice.getObjectInfo(fh);
-                    if (fi != null && fi.getName().toLowerCase().endsWith(".kmz")) {
-                        RemoteKmzFile rk = new RemoteKmzFile();
-                        rk.name = fi.getName();
-                        rk.size = fi.getCompressedSize();
-                        rk.dateModified = fi.getDateModified() > 0 ? (fi.getDateModified() * 1000L) : System.currentTimeMillis();
-                        rk.handle = fh;
-                        rk.folderTag = "RC2-Download";
-                        result.add(rk);
+                int[] files = mtpDevice.getObjectHandles(storageId, 0, downloadHandle);
+                if (files != null) {
+                    for (int fh : files) {
+                        MtpObjectInfo fi = mtpDevice.getObjectInfo(fh);
+                        if (fi != null && fi.getName() != null && fi.getName().toLowerCase().endsWith(".kmz")) {
+                            RemoteKmzFile rk = new RemoteKmzFile();
+                            rk.name = fi.getName();
+                            rk.size = fi.getCompressedSize();
+                            rk.dateModified = fi.getDateModified() > 0 ? (fi.getDateModified() * 1000L) : System.currentTimeMillis();
+                            rk.handle = fh;
+                            rk.folderTag = "RC2-Download";
+                            result.add(rk);
+                        }
                     }
                 }
             }
-            callback.onLog("[OK] KMZ en Download del RC2: " + result.size());
+            callback.onLog("[OK] KMZ en carpeta Download del RC2: " + result.size());
         } catch (Exception e) {
             callback.onLog("[WARN] No se pudo escanear Download del RC2: " + e.getMessage());
         }
@@ -408,7 +502,8 @@ public class MtpHelper {
                 MtpObjectInfo info = mtpDevice.getObjectInfo(kmzHandle);
                 if (info != null) size = info.getCompressedSize();
             }
-            if (size > 0 && size < 15000000) { // Limit to 15MB
+            if (size <= 0) size = 524288;
+            if (size < 15000000) { // Limit to 15MB
                 byte[] data = mtpDevice.getObject(kmzHandle, size);
                 if (data != null && data.length > 0) {
                     return android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
@@ -429,31 +524,6 @@ public class MtpHelper {
         return slots;
     }
 
-    private int navigateToWaypointFolder(int storageId) {
-        String[] pathParts = new String[]{"Android", "data", "dji.go.v5", "files", "waypoint"};
-        int currentHandle = 0; // Root handle in MTP
-
-        for (String part : pathParts) {
-            int foundHandle = -1;
-            int[] children = mtpDevice.getObjectHandles(storageId, 0, currentHandle);
-            if (children == null) return -1;
-
-            for (int handle : children) {
-                MtpObjectInfo info = mtpDevice.getObjectInfo(handle);
-                if (info != null && part.equalsIgnoreCase(info.getName())) {
-                    foundHandle = handle;
-                    break;
-                }
-            }
-
-            if (foundHandle == -1) {
-                return -1;
-            }
-            currentHandle = foundHandle;
-        }
-        return currentHandle;
-    }
-
     public boolean overwriteMissionKmz(String slotGuid, File localKmzFile) {
         if (mtpDevice == null) {
             callback.onLog("[ERROR] MTP no está conectado al control remoto.");
@@ -471,17 +541,35 @@ public class MtpHelper {
                 return false;
             }
 
-            int primaryStorage = storageIds[0];
-            callback.onLog("[INFO] Localizando carpeta de waypoints de DJI Fly...");
-            int waypointHandle = navigateToWaypointFolder(primaryStorage);
+            int targetStorage = storageIds[0];
+            int waypointHandle = -1;
+
+            // Find existing waypoint folder across storage IDs
+            for (int sid : storageIds) {
+                for (String[] pathParts : WAYPOINT_PATH_CANDIDATES) {
+                    int h = findHandleForPath(sid, pathParts);
+                    if (h != -1) {
+                        targetStorage = sid;
+                        waypointHandle = h;
+                        break;
+                    }
+                }
+                if (waypointHandle != -1) break;
+            }
+
             if (waypointHandle == -1) {
-                callback.onLog("[ERROR] Carpeta Android/data/dji.go.v5/files/waypoint no encontrada.");
+                // Fallback to standard path on primary storage
+                waypointHandle = findHandleForPath(targetStorage, new String[]{"Android", "data", "dji.go.v5", "files", "waypoint"});
+            }
+
+            if (waypointHandle == -1) {
+                callback.onLog("[ERROR] Carpeta de misiones DJI Fly no encontrada en RC 2.");
                 return false;
             }
 
-            callback.onLog("[INFO] Buscando la ranura: " + slotGuid);
+            callback.onLog("[INFO] Buscando ranura a sobrescribir: " + slotGuid);
             int slotFolderHandle = -1;
-            int[] slots = mtpDevice.getObjectHandles(primaryStorage, 0, waypointHandle);
+            int[] slots = mtpDevice.getObjectHandles(targetStorage, 0, waypointHandle);
             if (slots != null) {
                 for (int h : slots) {
                     MtpObjectInfo info = mtpDevice.getObjectInfo(h);
@@ -493,11 +581,11 @@ public class MtpHelper {
             }
 
             if (slotFolderHandle == -1) {
-                callback.onLog("[WARN] Ranura " + slotGuid + " no encontrada. Creándola...");
+                callback.onLog("[WARN] Ranura " + slotGuid + " no existe. Creando nueva carpeta...");
                 MtpObjectInfo.Builder folderBuilder = new MtpObjectInfo.Builder();
                 folderBuilder.setName(slotGuid);
                 folderBuilder.setParent(waypointHandle);
-                folderBuilder.setStorageId(primaryStorage);
+                folderBuilder.setStorageId(targetStorage);
                 folderBuilder.setFormat(MtpConstants.FORMAT_ASSOCIATION);
                 MtpObjectInfo createdFolder = mtpDevice.sendObjectInfo(folderBuilder.build());
                 if (createdFolder != null) {
@@ -512,18 +600,13 @@ public class MtpHelper {
             String targetFileName = slotGuid + ".kmz";
             callback.onLog("[INFO] Verificando misión previa: " + targetFileName);
 
-            int[] filesInSlot = mtpDevice.getObjectHandles(primaryStorage, 0, slotFolderHandle);
+            int[] filesInSlot = mtpDevice.getObjectHandles(targetStorage, 0, slotFolderHandle);
             if (filesInSlot != null) {
                 for (int fh : filesInSlot) {
                     MtpObjectInfo finfo = mtpDevice.getObjectInfo(fh);
-                    if (finfo != null && targetFileName.equalsIgnoreCase(finfo.getName())) {
+                    if (finfo != null && (targetFileName.equalsIgnoreCase(finfo.getName()) || finfo.getName().toLowerCase().endsWith(".kmz"))) {
                         callback.onLog("[INFO] Eliminando misión anterior (Handle: " + fh + ")...");
-                        boolean deleted = mtpDevice.deleteObject(fh);
-                        if (deleted) {
-                            callback.onLog("[OK] Misión previa eliminada limpiamente.");
-                        } else {
-                            callback.onLog("[WARN] deleteObject retornó falso; continuando con envío...");
-                        }
+                        mtpDevice.deleteObject(fh);
                     }
                 }
             }
@@ -534,7 +617,7 @@ public class MtpHelper {
             MtpObjectInfo.Builder fileBuilder = new MtpObjectInfo.Builder();
             fileBuilder.setName(targetFileName);
             fileBuilder.setParent(slotFolderHandle);
-            fileBuilder.setStorageId(primaryStorage);
+            fileBuilder.setStorageId(targetStorage);
             fileBuilder.setCompressedSize(fileSize);
             fileBuilder.setFormat(MtpConstants.FORMAT_UNDEFINED);
 
@@ -553,8 +636,6 @@ public class MtpHelper {
 
             if (sendOk) {
                 callback.onLog("[ÉXITO] 🎉 ¡Misión sobrescrita con éxito en DJI Fly!");
-                callback.onLog("[LISTO] 1. Abre DJI Fly en el control remoto RC 2.");
-                callback.onLog("[LISTO] 2. Toca 'Rutas de Vuelo' -> abre la misión y presiona INICIAR.");
                 return true;
             } else {
                 callback.onLog("[ERROR] Falló la transferencia binaria de sendObject.");
@@ -566,6 +647,7 @@ public class MtpHelper {
         }
     }
 
+    /** Deep deletion of a slot folder or file across ALL storage volumes and candidate paths. */
     public boolean deleteDeviceSlot(String slotGuid) {
         if (mtpDevice == null) {
             callback.onLog("[ERROR] MTP no está conectado para eliminar.");
@@ -574,43 +656,50 @@ public class MtpHelper {
         try {
             int[] storageIds = mtpDevice.getStorageIds();
             if (storageIds == null || storageIds.length == 0) return false;
-            int primaryStorage = storageIds[0];
-            int waypointHandle = navigateToWaypointFolder(primaryStorage);
-            if (waypointHandle == -1) return false;
 
-            int[] slots = mtpDevice.getObjectHandles(primaryStorage, 0, waypointHandle);
-            if (slots != null) {
-                for (int h : slots) {
-                    MtpObjectInfo info = mtpDevice.getObjectInfo(h);
-                    if (info != null && slotGuid.equalsIgnoreCase(info.getName())) {
-                        callback.onLog("[INFO] Eliminando contenido de la ranura RC 2: " + slotGuid);
-                        // Delete all inner files recursively
-                        int[] subFiles = mtpDevice.getObjectHandles(primaryStorage, 0, h);
-                        if (subFiles != null) {
-                            for (int fh : subFiles) {
-                                mtpDevice.deleteObject(fh);
+            boolean deletedAny = false;
+
+            for (int storageId : storageIds) {
+                for (String[] pathParts : WAYPOINT_PATH_CANDIDATES) {
+                    int parentHandle = findHandleForPath(storageId, pathParts);
+                    if (parentHandle == -1) continue;
+
+                    int[] children = mtpDevice.getObjectHandles(storageId, 0, parentHandle);
+                    if (children == null) continue;
+
+                    for (int handle : children) {
+                        MtpObjectInfo info = mtpDevice.getObjectInfo(handle);
+                        if (info != null && info.getName() != null) {
+                            String name = info.getName();
+                            if (slotGuid.equalsIgnoreCase(name) || name.equalsIgnoreCase(slotGuid + ".kmz")) {
+                                callback.onLog("[INFO] Eliminando contenido de " + name + " en MTP...");
+
+                                // If folder, recursively delete contents
+                                int[] subFiles = mtpDevice.getObjectHandles(storageId, 0, handle);
+                                if (subFiles != null) {
+                                    for (int fh : subFiles) {
+                                        mtpDevice.deleteObject(fh);
+                                    }
+                                }
+                                // Delete folder/file handle
+                                boolean ok = mtpDevice.deleteObject(handle);
+                                if (!ok) {
+                                    try { Thread.sleep(150); } catch (Exception ignored) {}
+                                    ok = mtpDevice.deleteObject(handle);
+                                }
+
+                                MtpObjectInfo verifyInfo = mtpDevice.getObjectInfo(handle);
+                                if (verifyInfo == null || ok) {
+                                    deletedAny = true;
+                                    callback.onLog("[ÉXITO] 🗑️ Misión/Ranura " + name + " eliminada físicamente del RC 2.");
+                                }
                             }
-                        }
-                        // Delete the slot directory object
-                        boolean ok = mtpDevice.deleteObject(h);
-                        if (!ok) {
-                            try { Thread.sleep(150); } catch (Exception ignored) {}
-                            ok = mtpDevice.deleteObject(h);
-                        }
-
-                        // Verify deletion
-                        MtpObjectInfo verifyInfo = mtpDevice.getObjectInfo(h);
-                        boolean verifiedDeleted = (verifyInfo == null || ok);
-
-                        if (verifiedDeleted) {
-                            callback.onLog("[ÉXITO] 🗑️ Ranura " + slotGuid + " eliminada físicamente de RC 2.");
-                            return true;
-                        } else {
-                            callback.onLog("[WARN] No se pudo confirmar el borrado MTP de " + slotGuid);
                         }
                     }
                 }
             }
+
+            return deletedAny;
         } catch (Exception e) {
             callback.onLog("[ERROR] Error eliminando ranura en RC 2: " + e.getMessage());
         }
