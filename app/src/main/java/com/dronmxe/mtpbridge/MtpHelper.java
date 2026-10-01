@@ -55,12 +55,22 @@ public class MtpHelper {
     private volatile boolean isOpening = false;
     private volatile boolean isScanning = false;
 
-    // Rutas candidatas para misiones en DJI RC 2 / RC Pro
+    // Rutas candidatas para misiones en DJI RC 2 / RC Pro / DJI Fly
     private static final String[][] WAYPOINT_PATH_CANDIDATES = new String[][]{
-            {"Android", "data", "dji.go.v5", "files", "waypoint"},
             {"Android", "data", "dji.go.v5", "files", "Waypoint"},
+            {"Android", "data", "dji.go.v5", "files", "waypoint"},
+            {"android", "data", "dji.go.v5", "files", "Waypoint"},
             {"android", "data", "dji.go.v5", "files", "waypoint"},
-            {"DJI", "dji.go.v5", "files", "waypoint"}
+            {"Android", "data", "com.dji.industry.pilot", "files", "Waypoint"},
+            {"Android", "data", "com.dji.industry.pilot", "files", "waypoint"},
+            {"Android", "data", "dji.pilottwo", "files", "Waypoint"},
+            {"Android", "data", "dji.pilottwo", "files", "waypoint"},
+            {"DJI", "dji.go.v5", "files", "Waypoint"},
+            {"DJI", "dji.go.v5", "files", "waypoint"},
+            {"DJI", "Waypoint"},
+            {"DJI", "waypoint"},
+            {"Waypoint"},
+            {"waypoint"}
     };
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {

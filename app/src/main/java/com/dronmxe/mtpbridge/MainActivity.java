@@ -305,6 +305,10 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
                     searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
                     searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
+                    searchDirs.add(new File("/sdcard/Android/data/dji.go.v5/files/Waypoint"));
+                    searchDirs.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
+                    searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/Waypoint"));
+                    searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/waypoint"));
                     searchDirs.add(getExternalFilesDir(null));
                     searchDirs.add(getCacheDir());
 
