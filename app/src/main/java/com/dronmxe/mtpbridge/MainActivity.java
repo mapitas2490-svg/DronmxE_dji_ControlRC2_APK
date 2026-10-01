@@ -467,23 +467,70 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
         @JavascriptInterface
         public boolean deleteLocalMission(String localFileName) {
-            File targetFile = null;
+            boolean deletedAny = false;
+            List<File> toRemove = new ArrayList<>();
+
+            // 1. Delete physical files from all search directories matching localFileName
+            List<File> searchDirs = new ArrayList<>();
+            searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+            searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
+            searchDirs.add(new File("/sdcard/Download"));
+            searchDirs.add(new File("/sdcard/Download/dronmxE"));
+            searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
+            searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
+            searchDirs.add(new File("/sdcard/Documents"));
+            searchDirs.add(getExternalFilesDir(null));
+            searchDirs.add(getCacheDir());
+
+            for (File dir : searchDirs) {
+                if (dir != null && dir.exists() && dir.isDirectory()) {
+                    File[] files = dir.listFiles((d, name) -> name != null && name.equalsIgnoreCase(localFileName));
+                    if (files != null) {
+                        for (File f : files) {
+                            if (f.exists()) {
+                                boolean ok = f.delete();
+                                if (ok) {
+                                    deletedAny = true;
+                                    toRemove.add(f);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             for (File f : availableKmzFiles) {
                 if (f.getName().equalsIgnoreCase(localFileName)) {
-                    targetFile = f;
-                    break;
+                    if (f.exists()) {
+                        if (f.delete()) deletedAny = true;
+                    }
+                    toRemove.add(f);
                 }
             }
-            if (targetFile != null && targetFile.exists()) {
-                boolean deleted = targetFile.delete();
-                if (deleted) {
-                    showToast("🗑️ Archivo " + localFileName + " eliminado.");
-                    availableKmzFiles.remove(targetFile);
-                    notifyJs("refreshLocalMissions();");
-                    return true;
-                }
+            availableKmzFiles.removeAll(toRemove);
+
+            // 2. Also remove record from Android MediaStore ContentResolver
+            try {
+                Uri collection = MediaStore.Files.getContentUri("external");
+                int count = getContentResolver().delete(collection, MediaStore.Files.FileColumns.DISPLAY_NAME + "=?", new String[]{localFileName});
+                if (count > 0) deletedAny = true;
+            } catch (Exception ignored) {}
+
+            // 3. Broadcast MediaScanner to refresh system indexes
+            try {
+                android.media.MediaScannerConnection.scanFile(MainActivity.this, new String[]{
+                        new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), localFileName).getAbsolutePath()
+                }, null, null);
+            } catch (Exception ignored) {}
+
+            if (deletedAny || toRemove.size() > 0) {
+                showToast("🗑️ Archivo " + localFileName + " eliminado del almacenamiento.");
+                triggerHaptic();
+                notifyJs("refreshLocalMissions();");
+                return true;
             }
-            showToast("No se pudo eliminar: " + localFileName);
+
+            showToast("No se pudo eliminar de disco: " + localFileName);
             return false;
         }
 

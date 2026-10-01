@@ -567,7 +567,10 @@ public class MtpHelper {
     }
 
     public boolean deleteDeviceSlot(String slotGuid) {
-        if (mtpDevice == null) return false;
+        if (mtpDevice == null) {
+            callback.onLog("[ERROR] MTP no está conectado para eliminar.");
+            return false;
+        }
         try {
             int[] storageIds = mtpDevice.getStorageIds();
             if (storageIds == null || storageIds.length == 0) return false;
@@ -580,16 +583,31 @@ public class MtpHelper {
                 for (int h : slots) {
                     MtpObjectInfo info = mtpDevice.getObjectInfo(h);
                     if (info != null && slotGuid.equalsIgnoreCase(info.getName())) {
-                        // Delete files inside
+                        callback.onLog("[INFO] Eliminando contenido de la ranura RC 2: " + slotGuid);
+                        // Delete all inner files recursively
                         int[] subFiles = mtpDevice.getObjectHandles(primaryStorage, 0, h);
                         if (subFiles != null) {
                             for (int fh : subFiles) {
                                 mtpDevice.deleteObject(fh);
                             }
                         }
+                        // Delete the slot directory object
                         boolean ok = mtpDevice.deleteObject(h);
-                        if (ok) callback.onLog("[OK] Ranura " + slotGuid + " eliminada de RC 2.");
-                        return ok;
+                        if (!ok) {
+                            try { Thread.sleep(150); } catch (Exception ignored) {}
+                            ok = mtpDevice.deleteObject(h);
+                        }
+
+                        // Verify deletion
+                        MtpObjectInfo verifyInfo = mtpDevice.getObjectInfo(h);
+                        boolean verifiedDeleted = (verifyInfo == null || ok);
+
+                        if (verifiedDeleted) {
+                            callback.onLog("[ÉXITO] 🗑️ Ranura " + slotGuid + " eliminada físicamente de RC 2.");
+                            return true;
+                        } else {
+                            callback.onLog("[WARN] No se pudo confirmar el borrado MTP de " + slotGuid);
+                        }
                     }
                 }
             }
