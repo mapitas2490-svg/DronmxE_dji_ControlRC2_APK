@@ -3248,23 +3248,25 @@
     }
 
     async function executeDjiInjection(force = false) {
-      if (!force) {
+      const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
+      const slot = AppState.activeSlotGuid;
+
+      if (!slot && !force) {
         promptConnectPhoneForInjection();
         return;
       }
 
-      const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
-      const slot = AppState.activeSlotGuid;
       const base64Data = await buildDjiKmzBlob(fileName);
 
       if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
-        window.AndroidBridge.saveKmzMission(base64Data, fileName, slot);
+        const resStr = window.AndroidBridge.saveKmzMission(base64Data, fileName, slot);
         closeModal('modal-send-dji');
         if (typeof showToast === 'function') {
-          showToast('Inyección completada a través del puente MTP hacia DJI Fly', 'success');
+          showToast('✅ ¡Misión inyectada exitosamente en DJI Fly!', 'success');
         }
       } else {
         closeModal('modal-send-dji');
+        saveKmzToDownloads();
       }
     }
 

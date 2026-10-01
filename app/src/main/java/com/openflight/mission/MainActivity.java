@@ -413,6 +413,12 @@ public class MainActivity extends AppCompatActivity {
 
                 if (devices != null && !devices.isEmpty()) {
                     for (UsbDevice dev : devices.values()) {
+                        // Ignorar módem de radio interno C5 del DJI RC 2 (PID 0x1020)
+                        if (dev.getProductId() == 0x1020 || (dev.getProductName() != null && dev.getProductName().equalsIgnoreCase("C5"))) {
+                            log("MTP_DEV", "Ignorando módem de radio interno C5 (PID=0x1020, no es almacenamiento).");
+                            continue;
+                        }
+
                         String devDesc = dev.getDeviceName() + " (VID=0x" + Integer.toHexString(dev.getVendorId()) + 
                                          ", PID=0x" + Integer.toHexString(dev.getProductId()) + 
                                          ", Prod=" + dev.getProductName() + 
