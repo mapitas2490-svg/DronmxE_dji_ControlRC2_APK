@@ -1546,7 +1546,11 @@
 
           <div id="dji-slots-container" class="modal-slots-list"></div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+          <button type="button" class="btn-export-pill" style="margin-top: 10px; justify-content: center; width: 100%; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff; font-weight: 800; font-size: 0.88rem; box-shadow: var(--shadow-md); border: none; padding: 10px;" onclick="sendToMtpBridgeApp()">
+            📲 Enviar a dronmxE Bridge (RC 2 OTG)
+          </button>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
             <button class="btn-export-pill" style="justify-content: center;" onclick="saveKmzToDownloads()">💾 Descargas</button>
             <button class="btn-export-pill" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;" onclick="shareKmzMission()">📤 Compartir</button>
           </div>
@@ -3301,6 +3305,18 @@
         }
       } else {
         saveKmzToDownloads();
+      }
+    }
+
+    async function sendToMtpBridgeApp() {
+      const fileNameInput = document.getElementById('export-filename');
+      const fileName = (fileNameInput && fileNameInput.value.trim()) || 'mision_fotogrametria';
+      const base64Data = await buildDjiKmzBlob(fileName);
+
+      if (window.AndroidBridge && window.AndroidBridge.openMtpBridge) {
+        window.AndroidBridge.openMtpBridge(base64Data, fileName);
+      } else {
+        shareKmzMission();
       }
     }
 

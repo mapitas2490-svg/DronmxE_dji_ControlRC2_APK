@@ -971,6 +971,49 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void openMtpBridge(String base64Data, String missionName) {
+            runOnUiThread(() -> {
+                try {
+                    byte[] decodedBytes;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        decodedBytes = Base64.getDecoder().decode(base64Data);
+                    } else {
+                        decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+                    }
+
+                    File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    if (!downloadDir.exists()) downloadDir.mkdirs();
+                    File kmzFile = new File(downloadDir, missionName + ".kmz");
+                    FileOutputStream fos = new FileOutputStream(kmzFile);
+                    fos.write(decodedBytes);
+                    fos.close();
+
+                    android.net.Uri fileUri;
+                    try {
+                        fileUri = androidx.core.content.FileProvider.getUriForFile(mContext, "com.openflight.mission.fileprovider", kmzFile);
+                    } catch (Exception e) {
+                        fileUri = android.net.Uri.fromFile(kmzFile);
+                    }
+
+                    android.content.Intent bridgeIntent = new android.content.Intent(android.content.Intent.ACTION_SEND);
+                    bridgeIntent.setComponent(new android.content.ComponentName("com.dronmxe.mtpbridge", "com.dronmxe.mtpbridge.MainActivity"));
+                    bridgeIntent.setType("application/vnd.google-earth.kmz");
+                    bridgeIntent.putExtra(android.content.Intent.EXTRA_STREAM, fileUri);
+                    bridgeIntent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                    try {
+                        mContext.startActivity(bridgeIntent);
+                    } catch (Exception notFound) {
+                        // Fallback to share chooser if bridge app isn't installed
+                        shareKmz(base64Data, missionName);
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(mContext, "Error al abrir Bridge: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void showToast(String message) {
             runOnUiThread(() -> Toast.makeText(mContext, message, Toast.LENGTH_SHORT).show());
         }
