@@ -38,6 +38,16 @@ public class WpmlKmzBuilder {
         }
     }
 
+    private static void logD(String tag, String msg) {
+        try { android.util.Log.d(tag, msg); } catch (Throwable t) { System.out.println("[" + tag + "] " + msg); }
+    }
+    private static void logW(String tag, String msg) {
+        try { android.util.Log.w(tag, msg); } catch (Throwable t) { System.err.println("[" + tag + "] " + msg); }
+    }
+    private static void logE(String tag, String msg, Throwable e) {
+        try { android.util.Log.e(tag, msg, e); } catch (Throwable t) { System.err.println("[" + tag + "] " + msg + " " + e); }
+    }
+
     /**
      * Procesa un archivo KMZ/KML local y devuelve un archivo KMZ formateado para DJI Fly.
      */
@@ -47,16 +57,16 @@ public class WpmlKmzBuilder {
         try {
             // 1. Verificar si ya es un paquete WPML de DJI (contiene wpmz/template.kml)
             if (isAlreadyDjiWpml(inputFile)) {
-                Log.d(TAG, "El archivo ya es un paquete DJI WPML válido: " + inputFile.getName());
+                logD(TAG, "El archivo ya es un paquete DJI WPML válido: " + inputFile.getName());
                 return inputFile;
             }
 
-            Log.d(TAG, "Misión no contiene formato WPML DJI. Convirtiendo a KMZ estándar para DJI Fly...");
+            logD(TAG, "Misión no contiene formato WPML DJI. Convirtiendo a KMZ estándar para DJI Fly...");
 
             // 2. Extraer waypoints del KML/KMZ de origen
             List<Waypoint> waypoints = extractWaypoints(inputFile);
             if (waypoints.isEmpty()) {
-                Log.w(TAG, "No se encontraron waypoints en el archivo original. Devolviendo sin modificar.");
+                logW(TAG, "No se encontraron waypoints en el archivo original. Devolviendo sin modificar.");
                 return inputFile;
             }
 
@@ -86,11 +96,11 @@ public class WpmlKmzBuilder {
                 zos.finish();
             }
 
-            Log.d(TAG, "✅ Paquete DJI WPML KMZ generado con éxito: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
+            logD(TAG, "✅ Paquete DJI WPML KMZ generado con éxito: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
             return targetKmz;
 
         } catch (Exception e) {
-            Log.e(TAG, "Error convirtiendo a paquete DJI WPML KMZ: " + e.getMessage(), e);
+            logE(TAG, "Error convirtiendo a paquete DJI WPML KMZ: " + e.getMessage(), e);
             return inputFile;
         }
     }
