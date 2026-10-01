@@ -2897,11 +2897,47 @@
         }
 
         slots.forEach((s) => {
+          if (s.guid && s.guid.startsWith('USB_PROMPT_')) {
+            const promptItem = document.createElement('div');
+            promptItem.style.cssText = 'padding: 10px; margin-bottom: 8px; background: #faf5ff; border: 1.5px dashed #a855f7; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;';
+            promptItem.innerHTML = `
+              <div>
+                <strong style="color: #6b21a8; font-size: 0.85rem;">🔌 Control DJI RC 2 detectado por USB</strong>
+                <p style="margin: 2px 0 0 0; font-size: 0.73rem; color: #7e22ce;">Toca para autorizar lectura directa de carpetas MTP</p>
+              </div>
+              <button type="button" style="padding: 6px 12px; background: #9333ea; color: #fff; border: none; border-radius: 6px; font-weight: 700; font-size: 0.78rem; cursor: pointer;">Autorizar</button>
+            `;
+            promptItem.onclick = () => {
+              if (window.AndroidBridge && window.AndroidBridge.requestUsbMtpPermission) {
+                window.AndroidBridge.requestUsbMtpPermission(s.deviceId);
+              }
+            };
+            container.appendChild(promptItem);
+            return;
+          }
+
           const isSelected = (s.guid === AppState.activeSlotGuid);
+          const isMtp = s.source === 'usb_mtp' || s.name.includes('[USB MTP');
+          const isHidden = s.name.includes('Oculta');
           const isSd = s.source === 'sdcard' || s.name.includes('[Tarjeta SD');
-          const badgeColor = isSd ? '#059669' : '#2563eb';
-          const badgeBg = isSd ? '#ecfdf5' : '#eff6ff';
-          const badgeText = isSd ? 'Tarjeta SD (RC 2)' : 'Memoria Interna (RC 2)';
+
+          let badgeColor = '#2563eb';
+          let badgeBg = '#eff6ff';
+          let badgeText = 'Memoria Interna (RC 2)';
+
+          if (isMtp) {
+            badgeColor = '#7c3aed';
+            badgeBg = '#f5f3ff';
+            badgeText = 'USB MTP (Control RC 2)';
+          } else if (isHidden) {
+            badgeColor = '#d97706';
+            badgeBg = '#fffbeb';
+            badgeText = isSd ? 'Tarjeta SD Oculta (RC 2)' : 'Memoria Oculta (RC 2)';
+          } else if (isSd) {
+            badgeColor = '#059669';
+            badgeBg = '#ecfdf5';
+            badgeText = 'Tarjeta SD (RC 2)';
+          }
 
           const item = document.createElement('div');
           item.className = 'slot-item' + (isSelected ? ' selected' : '');

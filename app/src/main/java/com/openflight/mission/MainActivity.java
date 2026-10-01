@@ -1,15 +1,27 @@
 package com.openflight.mission;
 
 import android.Manifest;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.content.Intent;
 import android.database.Cursor;
+import android.hardware.usb.UsbConstants;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbInterface;
+import android.hardware.usb.UsbManager;
+import android.mtp.MtpConstants;
+import android.mtp.MtpDevice;
+import android.mtp.MtpObjectInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import android.view.View;
 import android.view.WindowInsets;
@@ -28,17 +40,21 @@ import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Base64;
 import java.util.Date;
@@ -49,6 +65,24 @@ public class MainActivity extends AppCompatActivity {
     private ValueCallback<Uri[]> mFilePathCallback;
     private static final int FILE_CHOOSER_REQUEST_CODE = 2001;
     private static final int NATIVE_PICKER_REQUEST_CODE = 2002;
+    public static final String ACTION_USB_PERMISSION = "com.openflight.mission.USB_PERMISSION";
+
+    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if (device != null && webView != null) {
+                            webView.post(() -> webView.evaluateJavascript("refreshDjiSlots(true)", null));
+                        }
+                    }
+                }
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -130,8 +164,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        IntentFilter usbFilter = new IntentFilter(ACTION_USB_PERMISSION);
+        usbFilter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        usbFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        registerReceiver(usbReceiver, usbFilter);
+
         webView.addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            unregisterReceiver(usbReceiver);
+        } catch (Exception ignored) {}
     }
 
     private void requestStoragePermissions() {
@@ -189,28 +236,69 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        private List<String> listDirectoryViaShell(String dirPath) {
+            List<String> list = new ArrayList<>();
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"sh", "-c", "ls -1a \"" + dirPath + "\""});
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.equals(".") && !line.equals("..")) {
+                        list.add(line);
+                    }
+                }
+                p.waitFor();
+            } catch (Exception ignored) {}
+            return list;
+        }
+
         private List<File> getPossibleWaypointRoots() {
             List<File> roots = new ArrayList<>();
-            // 1. Memoria interna estándar
-            File internal = new File(Environment.getExternalStorageDirectory(), "Android/data/dji.go.v5/files/waypoint");
-            if (!roots.contains(internal)) roots.add(internal);
-            File internalDji = new File(Environment.getExternalStorageDirectory(), "DJI/dji.go.v5/files/waypoint");
-            if (!roots.contains(internalDji)) roots.add(internalDji);
+            File ext = Environment.getExternalStorageDirectory();
 
-            // 2. Tarjetas SD montadas en /storage/
+            // 1. Memoria interna estándar y carpetas ocultas de DJI
+            File[] internalCandidates = new File[]{
+                new File(ext, "Android/data/dji.go.v5/files/waypoint"),
+                new File(ext, "Android/data/dji.go.v5/files/.waypoint"),
+                new File(ext, "Android/data/dji.go.v5/files/.waypoint_history"),
+                new File(ext, "Android/data/dji.go.v5/files/Waypoint"),
+                new File(ext, "DJI/dji.go.v5/files/waypoint"),
+                new File(ext, "DJI/dji.go.v5/files/.waypoint"),
+                new File(ext, ".dji/waypoint"),
+                new File(ext, ".dji.go.v5/waypoint"),
+                new File(ext, ".waypoint"),
+                new File(ext, "Android/media/dji.go.v5/files/waypoint"),
+                new File(ext, "Android/data/dji.go.v5/files/FlightRecord")
+            };
+            for (File c : internalCandidates) {
+                if (!roots.contains(c)) roots.add(c);
+            }
+
+            // 2. Tarjetas SD montadas en /storage/ (y carpetas ocultas en SD)
             try {
                 File storage = new File("/storage");
                 if (storage.exists() && storage.isDirectory()) {
                     File[] mounts = storage.listFiles();
+                    if (mounts == null || mounts.length == 0) {
+                        List<String> shMounts = listDirectoryViaShell("/storage");
+                        List<File> temp = new ArrayList<>();
+                        for (String sm : shMounts) temp.add(new File(storage, sm));
+                        mounts = temp.toArray(new File[0]);
+                    }
                     if (mounts != null) {
                         for (File m : mounts) {
                             if (m.isDirectory() && !m.getName().equals("emulated") && !m.getName().equals("self")) {
                                 File[] sdCandidates = new File[]{
                                     new File(m, "Android/data/dji.go.v5/files/waypoint"),
+                                    new File(m, "Android/data/dji.go.v5/files/.waypoint"),
                                     new File(m, "Android/media/dji.go.v5/files/waypoint"),
                                     new File(m, "DJI/dji.go.v5/files/waypoint"),
+                                    new File(m, "DJI/dji.go.v5/files/.waypoint"),
+                                    new File(m, ".dji/waypoint"),
                                     new File(m, "dji.go.v5/files/waypoint"),
-                                    new File(m, "waypoint")
+                                    new File(m, "waypoint"),
+                                    new File(m, ".waypoint")
                                 };
                                 for (File cand : sdCandidates) {
                                     if (!roots.contains(cand)) roots.add(cand);
@@ -231,8 +319,13 @@ public class MainActivity extends AppCompatActivity {
                             int idx = p.indexOf("/Android/");
                             if (idx > 0) {
                                 String base = p.substring(0, idx);
-                                File candidate = new File(base, "Android/data/dji.go.v5/files/waypoint");
-                                if (!roots.contains(candidate)) roots.add(candidate);
+                                File[] candList = new File[]{
+                                    new File(base, "Android/data/dji.go.v5/files/waypoint"),
+                                    new File(base, "Android/data/dji.go.v5/files/.waypoint")
+                                };
+                                for (File c : candList) {
+                                    if (!roots.contains(c)) roots.add(c);
+                                }
                             }
                         }
                     }
@@ -254,6 +347,128 @@ public class MainActivity extends AppCompatActivity {
             return roots;
         }
 
+        private void scanMtpDevices(JSONArray array, Set<String> seenGuids) {
+            try {
+                UsbManager usbMgr = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
+                if (usbMgr == null) return;
+                HashMap<String, UsbDevice> devices = usbMgr.getDeviceList();
+                if (devices == null || devices.isEmpty()) return;
+
+                for (UsbDevice dev : devices.values()) {
+                    boolean isMtp = false;
+                    for (int i = 0; i < dev.getInterfaceCount(); i++) {
+                        UsbInterface ui = dev.getInterface(i);
+                        if ((ui.getInterfaceClass() == UsbConstants.USB_CLASS_STILL_IMAGE && ui.getInterfaceSubclass() == 1)
+                                || ui.getInterfaceClass() == 6 || ui.getInterfaceClass() == 255) {
+                            isMtp = true;
+                            break;
+                        }
+                    }
+                    if (isMtp) {
+                        if (!usbMgr.hasPermission(dev)) {
+                            JSONObject prompt = new JSONObject();
+                            prompt.put("guid", "USB_PROMPT_" + dev.getDeviceId());
+                            prompt.put("name", "🔌 [DJI RC 2 MTP Conectado] - Toca para autorizar lectura");
+                            prompt.put("lastModified", "MTP USB Detectado");
+                            prompt.put("source", "usb_mtp");
+                            prompt.put("deviceId", dev.getDeviceId());
+                            array.put(prompt);
+                        } else {
+                            UsbDeviceConnection conn = usbMgr.openDevice(dev);
+                            if (conn != null) {
+                                MtpDevice mtp = new MtpDevice(dev);
+                                if (mtp.open(conn)) {
+                                    int[] storageIds = mtp.getStorageIds();
+                                    if (storageIds != null) {
+                                        for (int sId : storageIds) {
+                                            scanMtpStorageDir(mtp, sId, 0, array, seenGuids, 0);
+                                        }
+                                    }
+                                    mtp.close();
+                                }
+                                conn.close();
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        private void scanMtpStorageDir(MtpDevice mtp, int storageId, int parentHandle, JSONArray array, Set<String> seenGuids, int depth) {
+            if (depth > 6) return;
+            try {
+                int[] handles = mtp.getObjectHandles(storageId, 0, parentHandle);
+                if (handles == null) return;
+                for (int h : handles) {
+                    MtpObjectInfo info = mtp.getObjectInfo(h);
+                    if (info == null) continue;
+                    String name = info.getName();
+                    if (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION) {
+                        if ("waypoint".equalsIgnoreCase(name) || ".waypoint".equalsIgnoreCase(name)) {
+                            int[] slotHandles = mtp.getObjectHandles(storageId, 0, h);
+                            if (slotHandles != null) {
+                                for (int sh : slotHandles) {
+                                    MtpObjectInfo sInfo = mtp.getObjectInfo(sh);
+                                    if (sInfo != null && sInfo.getFormat() == MtpConstants.FORMAT_ASSOCIATION) {
+                                        String guid = sInfo.getName();
+                                        if (seenGuids.contains(guid)) continue;
+                                        seenGuids.add(guid);
+
+                                        JSONObject slot = new JSONObject();
+                                        slot.put("guid", guid);
+                                        slot.put("mtpObjectHandle", sh);
+                                        slot.put("mtpStorageId", storageId);
+                                        slot.put("source", "usb_mtp");
+
+                                        int[] kmzHandles = mtp.getObjectHandles(storageId, 0, sh);
+                                        long sizeKb = 0;
+                                        if (kmzHandles != null && kmzHandles.length > 0) {
+                                            for (int kh : kmzHandles) {
+                                                MtpObjectInfo kInfo = mtp.getObjectInfo(kh);
+                                                if (kInfo != null && kInfo.getName().endsWith(".kmz")) {
+                                                    sizeKb = kInfo.getCompressedSize() / 1024;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        String sizeStr = sizeKb > 0 ? (" · " + sizeKb + " KB") : "";
+                                        slot.put("name", "Misión " + guid.substring(0, Math.min(8, guid.length())) + " [USB MTP · Control RC 2]" + sizeStr);
+                                        slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(sInfo.getDateModified() * 1000L)));
+                                        array.put(slot);
+                                    }
+                                }
+                            }
+                        } else if ("Android".equalsIgnoreCase(name) || "data".equalsIgnoreCase(name) || "dji.go.v5".equalsIgnoreCase(name) || "files".equalsIgnoreCase(name) || "DJI".equalsIgnoreCase(name) || ".dji".equalsIgnoreCase(name)) {
+                            scanMtpStorageDir(mtp, storageId, h, array, seenGuids, depth + 1);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public void requestUsbMtpPermission(int deviceId) {
+            try {
+                UsbManager usbMgr = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
+                if (usbMgr != null) {
+                    for (UsbDevice dev : usbMgr.getDeviceList().values()) {
+                        if (dev.getDeviceId() == deviceId) {
+                            PendingIntent pi = PendingIntent.getBroadcast(
+                                mContext, 0, new Intent(ACTION_USB_PERMISSION),
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0
+                            );
+                            usbMgr.requestPermission(dev, pi);
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
         @JavascriptInterface
         public String forceScanDjiWaypointSlots() {
             try {
@@ -265,7 +480,7 @@ public class MainActivity extends AppCompatActivity {
                 JSONArray arr = new JSONArray(result);
                 final int count = arr.length();
                 runOnUiThread(() -> {
-                    Toast.makeText(mContext, "Lectura en Control RC 2: " + count + " misiones detectadas en almacenamiento", Toast.LENGTH_LONG).show();
+                    Toast.makeText(mContext, "Lectura forzada en RC 2: " + count + " misiones encontradas (Disco, Ocultas y MTP)", Toast.LENGTH_LONG).show();
                 });
             } catch (Exception ignored) {}
             return result;
@@ -277,14 +492,32 @@ public class MainActivity extends AppCompatActivity {
             Set<String> seenGuids = new HashSet<>();
 
             try {
-                // Escaneo exhaustivo del almacenamiento local del control DJI RC 2 (Tarjeta MicroSD y Memoria Interna)
+                // 1. Escaneo USB MTP (si está conectado a un teléfono, tablet o PC)
+                scanMtpDevices(array, seenGuids);
+
+                // 2. Escaneo exhaustivo del almacenamiento local del control DJI RC 2 (Tarjeta MicroSD, Memoria Interna y Carpetas Ocultas)
                 List<File> roots = getPossibleWaypointRoots();
                 for (File wpRoot : roots) {
                     if (wpRoot.exists() && wpRoot.isDirectory()) {
                         boolean isSdCard = !wpRoot.getAbsolutePath().startsWith(Environment.getExternalStorageDirectory().getAbsolutePath());
-                        String storageLabel = isSdCard ? " [Tarjeta SD · RC 2]" : " [Memoria Interna · RC 2]";
+                        boolean isHidden = wpRoot.getName().startsWith(".") || wpRoot.getAbsolutePath().contains("/.");
+                        String storageLabel;
+                        if (isHidden) {
+                            storageLabel = isSdCard ? " [Tarjeta SD (Oculta) · RC 2]" : " [Memoria Oculta · RC 2]";
+                        } else {
+                            storageLabel = isSdCard ? " [Tarjeta SD · RC 2]" : " [Memoria Interna · RC 2]";
+                        }
 
                         File[] subDirs = wpRoot.listFiles();
+                        if (subDirs == null || subDirs.length == 0) {
+                            List<String> shDirs = listDirectoryViaShell(wpRoot.getAbsolutePath());
+                            if (!shDirs.isEmpty()) {
+                                List<File> temp = new ArrayList<>();
+                                for (String sd : shDirs) temp.add(new File(wpRoot, sd));
+                                subDirs = temp.toArray(new File[0]);
+                            }
+                        }
+
                         if (subDirs != null) {
                             Arrays.sort(subDirs, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
                             for (File slotDir : subDirs) {
@@ -299,6 +532,17 @@ public class MainActivity extends AppCompatActivity {
                                     slot.put("isSdCard", isSdCard);
 
                                     File[] kmzFiles = slotDir.listFiles((d, n) -> n.toLowerCase().endsWith(".kmz") && !n.endsWith(".bak"));
+                                    if (kmzFiles == null || kmzFiles.length == 0) {
+                                        List<String> shKmz = listDirectoryViaShell(slotDir.getAbsolutePath());
+                                        List<File> tempK = new ArrayList<>();
+                                        for (String fn : shKmz) {
+                                            if (fn.toLowerCase().endsWith(".kmz") && !fn.endsWith(".bak")) {
+                                                tempK.add(new File(slotDir, fn));
+                                            }
+                                        }
+                                        kmzFiles = tempK.toArray(new File[0]);
+                                    }
+
                                     String displayName = guid;
                                     long kmzSize = 0;
                                     if (kmzFiles != null && kmzFiles.length > 0) {
@@ -324,12 +568,10 @@ public class MainActivity extends AppCompatActivity {
                 if (array.length() > 0) {
                     prefs.edit().putString("cached_slots", array.toString()).apply();
                 } else {
-                    // Si aún no se lee el disco o permisos iniciales, recuperar caché o slots detectados en el RC 2
                     String cached = prefs.getString("cached_slots", null);
                     if (cached != null && !cached.isEmpty()) {
                         return cached;
                     } else {
-                        // Slots reales detectados en la tarjeta MicroSD del DJI RC 2
                         String[][] defaultRcSlots = new String[][]{
                             {"DF5F9C06-1155-4737-9376-B36B0DD6E9F8", "Misión DF5F9C06 [Tarjeta SD · RC 2]", "2026-09-30 11:19"},
                             {"087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", "Misión 087A9AFE [Tarjeta SD · RC 2]", "2026-08-22 18:44"},
@@ -385,7 +627,7 @@ public class MainActivity extends AppCompatActivity {
                     targetGuid = java.util.UUID.randomUUID().toString().toUpperCase();
                 }
 
-                // Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD y Memoria Interna del control RC 2)
+                // Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD, Memoria Interna y Carpetas Ocultas del control RC 2)
                 List<File> roots = getPossibleWaypointRoots();
                 for (File wpRoot : roots) {
                     try {
@@ -400,30 +642,47 @@ public class MainActivity extends AppCompatActivity {
                         if (slotDir.exists()) {
                             File targetKmz = new File(slotDir, targetGuid + ".kmz");
                             if (targetKmz.exists()) {
-                                // Respaldo de seguridad previo
                                 File bak = new File(slotDir, targetGuid + ".kmz.bak");
                                 targetKmz.renameTo(bak);
                             }
-                            FileOutputStream fosSlot = new FileOutputStream(targetKmz);
-                            fosSlot.write(decodedBytes);
-                            fosSlot.close();
 
-                            File missionKmz = new File(slotDir, missionName + ".kmz");
-                            FileOutputStream fosMission = new FileOutputStream(missionKmz);
-                            fosMission.write(decodedBytes);
-                            fosMission.close();
+                            boolean written = false;
+                            try {
+                                FileOutputStream fosSlot = new FileOutputStream(targetKmz);
+                                fosSlot.write(decodedBytes);
+                                fosSlot.close();
 
-                            slotDir.setLastModified(System.currentTimeMillis());
-                            targetKmz.setLastModified(System.currentTimeMillis());
+                                File missionKmz = new File(slotDir, missionName + ".kmz");
+                                FileOutputStream fosMission = new FileOutputStream(missionKmz);
+                                fosMission.write(decodedBytes);
+                                fosMission.close();
+                                written = true;
+                            } catch (Exception ioEx) {
+                                // Forzado de escritura mediante Shell de Linux para carpetas ocultas/protegidas
+                                try {
+                                    Process p = Runtime.getRuntime().exec(new String[]{
+                                        "sh", "-c", "mkdir -p \"" + slotDir.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + targetKmz.getAbsolutePath() + "\" && chmod 666 \"" + targetKmz.getAbsolutePath() + "\""
+                                    });
+                                    p.waitFor();
+                                    if (targetKmz.exists() && targetKmz.length() > 0) {
+                                        written = true;
+                                    }
+                                } catch (Exception shellEx) {
+                                    shellEx.printStackTrace();
+                                }
+                            }
 
-                            injected = true;
-                            result.put("slotInjected", targetGuid);
-                            result.put("targetRoot", wpRoot.getAbsolutePath());
+                            if (written) {
+                                slotDir.setLastModified(System.currentTimeMillis());
+                                targetKmz.setLastModified(System.currentTimeMillis());
+                                injected = true;
+                                result.put("slotInjected", targetGuid);
+                                result.put("targetRoot", wpRoot.getAbsolutePath());
 
-                            // Actualizar o crear historial
-                            File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
-                            if (!historyFile.exists()) {
-                                try { historyFile.createNewFile(); } catch (Exception ignored) {}
+                                File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
+                                if (!historyFile.exists()) {
+                                    try { historyFile.createNewFile(); } catch (Exception ignored) {}
+                                }
                             }
                         }
                     } catch (Exception e) {
