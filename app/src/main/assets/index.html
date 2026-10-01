@@ -2553,6 +2553,10 @@
         recalculateMission();
       } else if (viewName === 'export') {
         document.getElementById('export-screen').classList.add('active');
+        const exportFilenameInput = document.getElementById('export-filename');
+        if (exportFilenameInput && (!exportFilenameInput.value || exportFilenameInput.value === 'mision_fotogrametria' || exportFilenameInput.value === 'mision_dji')) {
+          exportFilenameInput.value = AppState.currentMissionName || getNextMissionConsecutiveName();
+        }
         refreshExportMissionsList();
         refreshDjiSlots();
         refreshDiagnosticLog();
@@ -2567,30 +2571,73 @@
     function openModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-    function openSendToDjiFlyModal() {
-      openModal('modal-send-dji');
-      refreshDjiSlots();
+    function getNextMissionConsecutiveName() {
+      const today = new Date();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const basePrefix = `Mision_${mm}-${dd}`;
+
+      let maxNum = 0;
+      const allMissions = AppState.savedMissions || [];
+      allMissions.forEach(m => {
+        if (m && m.name) {
+          const match = m.name.match(new RegExp(`^${basePrefix}(?:_(\\d+))?$`, 'i'));
+          if (match) {
+            const n = match[1] ? parseInt(match[1], 10) : 1;
+            if (n > maxNum) maxNum = n;
+          }
+        }
+      });
+
+      let stored = parseInt(localStorage.getItem('dronmxe_last_consecutive_' + basePrefix) || '0', 10);
+      let nextNum = Math.max(maxNum + 1, stored + 1);
+
+      const padNum = String(nextNum).padStart(2, '0');
+      return `${basePrefix}_${padNum}`;
     }
 
     function openSaveMissionModal() {
-      document.getElementById('save-mission-name-input').value = "Mision_" + new Date().toISOString().slice(5, 10);
+      document.getElementById('save-mission-name-input').value = getNextMissionConsecutiveName();
       openModal('modal-save-mission');
     }
 
     function confirmSaveMission() {
-      const name = document.getElementById('save-mission-name-input').value.trim() || 'Mision_1';
+      const nameInput = document.getElementById('save-mission-name-input');
+      const name = (nameInput && nameInput.value.trim()) || getNextMissionConsecutiveName();
+      
+      const today = new Date();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const basePrefix = `Mision_${mm}-${dd}`;
+      const match = name.match(new RegExp(`^${basePrefix}_(\\d+)$`, 'i'));
+      if (match) {
+        const num = parseInt(match[1], 10);
+        localStorage.setItem('dronmxe_last_consecutive_' + basePrefix, num);
+      }
+
       const mission = {
         name: name,
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         points: AppState.points.map(p => ({ lat: p.lat, lng: p.lng })),
         altitude: AppState.altitude,
         speed: AppState.speed,
         camera: AppState.camera
       };
       AppState.savedMissions.push(mission);
+      AppState.currentMissionName = name;
       localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
       loadSavedMissionsFromStorage();
       closeModal('modal-save-mission');
+
+      const exportFilenameInput = document.getElementById('export-filename');
+      if (exportFilenameInput) {
+        exportFilenameInput.value = name;
+      }
+      const expCurName = document.getElementById('exp-current-mission-name');
+      if (expCurName) {
+        expCurName.textContent = name;
+      }
+
       if (window.AndroidBridge && window.AndroidBridge.showToast) {
         window.AndroidBridge.showToast("Misión '" + name + "' guardada con éxito");
       }
@@ -2876,6 +2923,11 @@
       AppState.altitude = m.altitude || 80;
       AppState.speed = m.speed || 8;
       AppState.camera = m.camera || 'DJI_MINI_5_PRO';
+      AppState.currentMissionName = m.name;
+      const exportFilenameInput = document.getElementById('export-filename');
+      if (exportFilenameInput) {
+        exportFilenameInput.value = m.name;
+      }
       renderBoundary();
       recalculateMission();
       switchToView('map');
