@@ -1231,9 +1231,9 @@
             <span class="stat-chip-icon">📸</span>
             <span class="stat-chip-val" id="stat-waypoints">0 WP/Fotos</span>
           </div>
-          <div class="stat-chip" style="grid-column: span 2;" title="Cálculo de baterías (DJI Fly soporta corte por batería baja y reanudación automática)">
+          <div class="stat-chip" title="Baterías estimadas">
             <span class="stat-chip-icon">🔋</span>
-            <span class="stat-chip-val" id="stat-batteries">1 Batería · Reanuda en corte</span>
+            <span class="stat-chip-val" id="stat-batteries">1</span>
           </div>
         </div>
 
@@ -1373,9 +1373,10 @@
         <div class="config-group">
           <label class="config-label">Al perder señal RC</label>
           <select id="cfg-lost-action" class="select-input" onchange="AppState.signalLossAction=this.value">
-            <option value="continue" selected>Continuar misión autónoma hasta finalizar</option>
-            <option value="goBack">Regresar a Casa (RTH)</option>
+            <option value="goHome" selected>Regresar a Casa (RTH · Seguro)</option>
+            <option value="continue">Continuar misión autónoma hasta finalizar</option>
             <option value="hover">Quedarse suspendido (Hover)</option>
+            <option value="landing">Aterrizar automáticamente</option>
           </select>
         </div>
 
@@ -1765,7 +1766,7 @@
       gridAngle: 45,
       signalLossContinue: true,
       finishAction: 'goHome',
-      signalLossAction: 'continue',
+      signalLossAction: 'goHome',
       turnMode: 'toPointAndPassWithContinuityCurvature',
       headingMode: 'smoothTransition',
       demElevations: {},
@@ -2300,7 +2301,7 @@
       if (batEl) {
         const secs = timeSeconds || 0;
         const estBats = Math.max(1, Math.ceil(secs / (22 * 60)));
-        batEl.textContent = `${estBats} Batería${estBats > 1 ? 's' : ''} · Reanuda en corte`;
+        batEl.textContent = `${estBats}`;
       }
 
       const pointsBadge = document.getElementById('map-points-badge');
@@ -3113,9 +3114,22 @@
       const timeSeconds = Math.round(totalDist / (AppState.speed || 8));
 
       const finishAction = AppState.finishAction || 'goHome';
-      const lostAction = AppState.signalLossAction || 'continue';
-      const exitOnRCLost = lostAction === 'continue' ? 'executeLostAction' : 'goBack';
-      const executeRCLostAction = lostAction === 'continue' ? 'continue' : (lostAction === 'hover' ? 'hover' : 'goBack');
+      const lostAction = AppState.signalLossAction || 'goHome';
+      let exitOnRCLost = 'executeLostAction';
+      let executeRCLostAction = 'goHome';
+      if (lostAction === 'continue') {
+        exitOnRCLost = 'goContinue';
+        executeRCLostAction = 'goHome';
+      } else if (lostAction === 'hover') {
+        exitOnRCLost = 'executeLostAction';
+        executeRCLostAction = 'hover';
+      } else if (lostAction === 'landing') {
+        exitOnRCLost = 'executeLostAction';
+        executeRCLostAction = 'landing';
+      } else { // 'goHome' / RTH
+        exitOnRCLost = 'executeLostAction';
+        executeRCLostAction = 'goHome';
+      }
       const turnMode = AppState.turnMode || 'toPointAndPassWithContinuityCurvature';
       const headingMode = AppState.headingMode || 'smoothTransition';
 
