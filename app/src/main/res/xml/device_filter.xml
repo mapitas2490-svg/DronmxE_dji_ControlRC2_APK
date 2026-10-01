@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DJI RC 2 Controller VID: 0x2CA3, PID: 0x1021 -->
+    <usb-device vendor-id="11427" product-id="4129" />
+    <!-- DJI RC Pro / Other DJI Controllers VID 0x2CA3 -->
+    <usb-device vendor-id="11427" />
+    <!-- Standard MTP Device Class -->
+    <usb-device class="6" subclass="1" protocol="1" />
+</resources>
