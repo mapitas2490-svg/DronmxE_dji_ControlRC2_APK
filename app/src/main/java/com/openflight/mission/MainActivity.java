@@ -4,13 +4,18 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.OpenableColumns;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -23,10 +28,12 @@ import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +46,9 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
+    private ValueCallback<Uri[]> mFilePathCallback;
+    private static final int FILE_CHOOSER_REQUEST_CODE = 2001;
+    private static final int NATIVE_PICKER_REQUEST_CODE = 2002;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +76,35 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (mFilePathCallback != null) {
+                    mFilePathCallback.onReceiveValue(null);
+                }
+                mFilePathCallback = filePathCallback;
+
+                try {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                    String[] mimeTypes = {
+                        "application/vnd.google-earth.kml+xml",
+                        "application/vnd.google-earth.kmz",
+                        "application/xml",
+                        "text/xml",
+                        "application/zip",
+                        "application/octet-stream",
+                        "*/*"
+                    };
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+                    startActivityForResult(Intent.createChooser(intent, "Seleccionar archivo KML / KMZ"), FILE_CHOOSER_REQUEST_CODE);
+                    return true;
+                } catch (Exception e) {
+                    mFilePathCallback = null;
+                    return false;
+                }
             }
         });
         webView.setWebViewClient(new WebViewClient() {
@@ -624,6 +663,93 @@ public class MainActivity extends AppCompatActivity {
                 }
             } catch (Exception ignored) {}
             return "";
+        }
+
+        @JavascriptInterface
+        public void openNativeFilePicker() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                    String[] mimeTypes = {
+                        "application/vnd.google-earth.kml+xml",
+                        "application/vnd.google-earth.kmz",
+                        "application/xml",
+                        "text/xml",
+                        "application/zip",
+                        "application/octet-stream",
+                        "*/*"
+                    };
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+                    startActivityForResult(Intent.createChooser(intent, "Seleccionar archivo KML / KMZ"), NATIVE_PICKER_REQUEST_CODE);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Error abriendo selector: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (mFilePathCallback != null) {
+                Uri[] results = null;
+                if (resultCode == RESULT_OK && data != null) {
+                    if (data.getData() != null) {
+                        results = new Uri[]{ data.getData() };
+                    } else if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        results = new Uri[count];
+                        for (int i = 0; i < count; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                        }
+                    }
+                }
+                mFilePathCallback.onReceiveValue(results);
+                mFilePathCallback = null;
+            }
+        } else if (requestCode == NATIVE_PICKER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                handleNativePickedUri(data.getData());
+            }
+        }
+    }
+
+    private void handleNativePickedUri(Uri uri) {
+        try {
+            String fileName = "archivo.kml";
+            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (nameIndex >= 0) {
+                    fileName = cursor.getString(nameIndex);
+                }
+                cursor.close();
+            }
+
+            InputStream is = getContentResolver().openInputStream(uri);
+            if (is != null) {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] chunk = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = is.read(chunk, 0, chunk.length)) != -1) {
+                    buffer.write(chunk, 0, bytesRead);
+                }
+                buffer.flush();
+                is.close();
+                byte[] fileBytes = buffer.toByteArray();
+                String base64Data = Base64.getEncoder().encodeToString(fileBytes);
+                final String safeFileName = fileName.replace("'", "\\'");
+
+                runOnUiThread(() -> {
+                    webView.evaluateJavascript("if (window.loadKmlFromNative) { window.loadKmlFromNative('" + base64Data + "', '" + safeFileName + "'); }", null);
+                });
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Error leyendo archivo: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 }

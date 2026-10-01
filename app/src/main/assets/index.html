@@ -50,9 +50,9 @@
        SIDEBAR / LEFT DRAWER (Resizable / Collapsible)
        ========================================================= */
     #sidebar {
-      width: 380px;
-      min-width: 340px;
-      max-width: 440px;
+      width: 32vw;
+      min-width: 250px;
+      max-width: 330px;
       background: var(--bg-panel);
       display: flex;
       flex-direction: column;
@@ -61,6 +61,7 @@
       box-shadow: 2px 0 16px rgba(0,0,0,0.15);
       position: relative;
       transition: transform 0.25s ease;
+      flex-shrink: 0;
     }
 
     #sidebar.hidden {
@@ -81,11 +82,11 @@
 
     /* Header */
     .app-header {
-      padding: 16px 20px 14px 20px;
+      padding: 10px 14px 8px 14px;
       border-bottom: 1px solid var(--border-color);
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
 
     .app-title-row {
@@ -95,23 +96,23 @@
     }
 
     .app-title {
-      font-size: 1.45rem;
+      font-size: 1.15rem;
       font-weight: 800;
       letter-spacing: -0.5px;
       color: #0f172a;
     }
 
     .app-author-link {
-      font-size: 0.85rem;
+      font-size: 0.76rem;
       color: var(--primary-dark);
       background: var(--primary-light);
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-radius: 9999px;
       text-decoration: none;
       font-weight: 700;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       transition: all 0.15s ease;
       cursor: pointer;
     }
@@ -126,20 +127,22 @@
       display: flex;
       background: #edf2f7;
       border-radius: 9999px;
-      padding: 4px;
-      margin: 14px 18px 8px 18px;
+      padding: 3px;
+      margin: 8px 10px 6px 10px;
+      gap: 2px;
     }
 
     .mode-tab {
       flex: 1;
-      padding: 8px 0;
+      padding: 5px 0;
       text-align: center;
-      font-size: 0.82rem;
+      font-size: 0.74rem;
       font-weight: 600;
       color: var(--text-muted);
       border-radius: 9999px;
       cursor: pointer;
       transition: all 0.15s ease;
+      white-space: nowrap;
     }
 
     .mode-tab.active {
@@ -151,10 +154,10 @@
     .drawer-content {
       flex: 1;
       overflow-y: auto;
-      padding: 16px 18px;
+      padding: 8px 10px 16px 10px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 10px;
     }
 
     .section-title {
@@ -951,15 +954,15 @@
     }
 
     .modal-card {
-      width: 480px;
-      max-width: 90vw;
+      width: 380px;
+      max-width: 88vw;
       background: #ffffff;
-      border-radius: 20px;
+      border-radius: 16px;
       box-shadow: var(--shadow-lg);
-      padding: 24px;
+      padding: 14px 18px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 10px;
       animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -969,18 +972,18 @@
     }
 
     .modal-title {
-      font-size: 1.25rem;
+      font-size: 1.05rem;
       font-weight: 800;
       color: #0f172a;
     }
 
     .modal-subtext-blue {
-      font-size: 0.8rem;
+      font-size: 0.76rem;
       color: #1976d2;
       background: #e3f2fd;
-      padding: 10px 14px;
-      border-radius: 10px;
-      line-height: 1.45;
+      padding: 8px 12px;
+      border-radius: 8px;
+      line-height: 1.4;
     }
 
     .modal-section-title {
@@ -1539,22 +1542,25 @@
        ========================================================= -->
   <div id="modal-offline-download" class="modal-overlay">
     <div class="modal-card">
-      <h3 class="modal-title">Descarga de Mapa Offline</h3>
-      <div class="modal-subtext-blue">
-        Descarga las teselas satelitales del área visible para volar sin conexión a internet en campo.
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 class="modal-title">Mapa Satelital Offline</h3>
+        <button class="modal-btn-close" style="padding: 2px 6px; font-size: 1rem;" onclick="closeModal('modal-offline-download')">✕</button>
       </div>
-      <div style="font-size: 0.85rem; color: #334155; display: flex; flex-direction: column; gap: 8px;">
-        <label>Nivel de zoom objetivo:</label>
-        <select id="offline-zoom-select" class="select-input">
+      <div class="modal-subtext-blue">
+        Guarda en caché las teselas satelitales del área visible para volar sin conexión a internet en campo.
+      </div>
+      <div style="font-size: 0.8rem; color: #334155; display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-weight: 600;">Nivel de detalle:</label>
+        <select id="offline-zoom-select" class="select-input" style="padding: 6px 8px; font-size: 0.8rem;">
           <option value="16">Zoom 16 (General ~ 15 MB)</option>
-          <option value="17" selected>Zoom 17 (Detalle Fotogramétrico ~ 45 MB)</option>
+          <option value="17" selected>Zoom 17 (Fotogramétrico ~ 45 MB)</option>
           <option value="18">Zoom 18 (Alta Resolución ~ 120 MB)</option>
         </select>
-        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Área visible seleccionada: ~ 5.7 ha</p>
+        <p style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">Área visible actual lista para caché</p>
       </div>
-      <div class="modal-actions">
-        <button class="modal-btn-close" onclick="closeModal('modal-offline-download')">Cerrar</button>
-        <button class="modal-btn-send" onclick="startOfflineDownload()">Descargar Área</button>
+      <div class="modal-actions" style="margin-top: 4px;">
+        <button class="modal-btn-close" onclick="closeModal('modal-offline-download')">Cancelar</button>
+        <button class="modal-btn-send" style="padding: 8px 18px; font-size: 0.82rem;" onclick="startOfflineDownload()">Descargar Caché</button>
       </div>
     </div>
   </div>
@@ -1564,20 +1570,23 @@
        ========================================================= -->
   <div id="modal-mbtiles" class="modal-overlay">
     <div class="modal-card">
-      <h3 class="modal-title">Mapas Offline MBTiles</h3>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 class="modal-title">Mapas Offline MBTiles</h3>
+        <button class="modal-btn-close" style="padding: 2px 6px; font-size: 1rem;" onclick="closeModal('modal-mbtiles')">✕</button>
+      </div>
       <div class="modal-subtext-blue">
         Puedes colocar tus archivos raster <strong>.mbtiles</strong> en la carpeta <code>/sdcard/dronmxE/tiles/</code> del control para visualizarlos automáticamente.
       </div>
-      <div style="font-size: 0.85rem; color: #334155;">
+      <div style="font-size: 0.82rem; color: #334155;">
         <p>Capas detectadas:</p>
-        <ul style="margin: 8px 0 0 20px; font-size: 0.82rem; color: var(--text-muted);">
+        <ul style="margin: 6px 0 0 18px; font-size: 0.78rem; color: var(--text-muted);">
           <li>Google Satellite (Caché local activa)</li>
           <li>Ortofoto VARI (Si está presente en la carpeta)</li>
         </ul>
       </div>
-      <div class="modal-actions">
+      <div class="modal-actions" style="margin-top: 4px;">
         <button class="modal-btn-close" onclick="closeModal('modal-mbtiles')">Cerrar</button>
-        <button class="modal-btn-send" onclick="closeModal('modal-mbtiles')">Aceptar</button>
+        <button class="modal-btn-send" style="padding: 8px 18px; font-size: 0.82rem;" onclick="closeModal('modal-mbtiles')">Aceptar</button>
       </div>
     </div>
   </div>
@@ -1587,12 +1596,21 @@
        ========================================================= -->
   <div id="modal-kml-import" class="modal-overlay">
     <div class="modal-card">
-      <h3 class="modal-title">Importar Polígono KML / KMZ</h3>
-      <div class="modal-subtext-blue">
-        Selecciona un archivo .kml o .kmz con un polígono o ruta de coordenadas para cargarlo directamente en el mapa.
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 class="modal-title">Importar Polígono KML / KMZ</h3>
+        <button class="modal-btn-close" style="padding: 2px 6px; font-size: 1rem;" onclick="closeModal('modal-kml-import')">✕</button>
       </div>
-      <input type="file" id="kml-file-input" accept=".kml,.kmz" class="modal-input" onchange="handleKmlFileSelected(event)" />
-      <div class="modal-actions">
+      <div class="modal-subtext-blue">
+        Selecciona tu archivo <b>.kml</b> o <b>.kmz</b> generado en Litchi, Google Earth o QGIS. La app cargará el polígono y trazará los waypoints de vuelo automáticamente.
+      </div>
+
+      <button type="button" class="modal-btn-send" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.88rem; border-radius: 12px; margin-top: 4px;" onclick="triggerKmlPicker()">
+        📂 Seleccionar Archivo KML / KMZ
+      </button>
+
+      <input type="file" id="kml-file-input" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" style="display: none;" onchange="handleKmlFileSelected(event)" />
+
+      <div class="modal-actions" style="margin-top: 4px;">
         <button class="modal-btn-close" onclick="closeModal('modal-kml-import')">Cerrar</button>
       </div>
     </div>
@@ -2340,6 +2358,51 @@
     function openMbtilesModal() { openModal('modal-mbtiles'); }
     function openKmlImportModal() { openModal('modal-kml-import'); }
 
+    function triggerKmlPicker() {
+      if (window.AndroidBridge && window.AndroidBridge.openNativeFilePicker) {
+        window.AndroidBridge.openNativeFilePicker();
+      } else {
+        const input = document.getElementById('kml-file-input');
+        if (input) input.click();
+      }
+    }
+
+    async function loadKmlFromNative(base64Data, fileName) {
+      try {
+        let kmlText = '';
+        const isKmz = (fileName || '').toLowerCase().endsWith('.kmz');
+
+        if (isKmz) {
+          const binaryString = atob(base64Data);
+          const len = binaryString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const zip = await JSZip.loadAsync(bytes.buffer);
+          const kmlFile = Object.values(zip.files).find(f => f.name.toLowerCase().endsWith('.kml') || f.name.toLowerCase().endsWith('.wpml'));
+          if (!kmlFile) {
+            alert("No se encontró ningún archivo KML o WPML dentro del KMZ seleccionado.");
+            return;
+          }
+          kmlText = await kmlFile.async('text');
+        } else {
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const decoder = new TextDecoder('utf-8');
+          kmlText = decoder.decode(bytes);
+        }
+
+        processKmlText(kmlText, fileName);
+      } catch (err) {
+        alert("Error al cargar archivo " + fileName + ": " + err.message);
+      }
+    }
+    window.loadKmlFromNative = loadKmlFromNative;
+
     async function handleKmlFileSelected(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -2363,6 +2426,14 @@
           });
         }
 
+        processKmlText(kmlText, file.name);
+      } catch (err) {
+        alert("Error al procesar el archivo KML/KMZ: " + err.message);
+      }
+    }
+
+    function processKmlText(kmlText, fileName) {
+      try {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(kmlText, "text/xml");
         const coordsElems = xmlDoc.querySelectorAll("coordinates");
@@ -2402,10 +2473,10 @@
             alert(msg);
           }
         } else {
-          alert("El archivo KML/KMZ no contiene suficientes coordenadas válidas.");
+          alert("El archivo KML/KMZ (" + fileName + ") no contiene suficientes coordenadas de polígono.");
         }
       } catch (err) {
-        alert("Error al procesar el archivo KML/KMZ: " + err.message);
+        alert("Error al interpretar coordenadas: " + err.message);
       }
     }
 
