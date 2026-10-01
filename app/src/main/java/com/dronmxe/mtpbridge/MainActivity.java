@@ -246,6 +246,41 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     }
                 }
 
+                // Fallback to MediaStore query for Android Scoped Storage
+                try {
+                    Uri collection = MediaStore.Files.getContentUri("external");
+                    String[] projection = new String[]{
+                            MediaStore.Files.FileColumns._ID,
+                            MediaStore.Files.FileColumns.DISPLAY_NAME,
+                            MediaStore.Files.FileColumns.DATA,
+                            MediaStore.Files.FileColumns.SIZE,
+                            MediaStore.Files.FileColumns.DATE_MODIFIED
+                    };
+                    String selection = MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE '%.kmz'";
+                    try (Cursor cursor = getContentResolver().query(collection, projection, selection, null, MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC")) {
+                        if (cursor != null) {
+                            int dataIdx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
+                            while (cursor.moveToNext()) {
+                                if (dataIdx != -1) {
+                                    String path = cursor.getString(dataIdx);
+                                    if (path != null) {
+                                        File f = new File(path);
+                                        if (f.exists()) {
+                                            boolean dup = false;
+                                            for (File existing : availableKmzFiles) {
+                                                if (existing.getName().equalsIgnoreCase(f.getName())) {
+                                                    dup = true; break;
+                                                }
+                                            }
+                                            if (!dup) availableKmzFiles.add(f);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+
                 Collections.sort(availableKmzFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
 
                 JSONArray arr = new JSONArray();
