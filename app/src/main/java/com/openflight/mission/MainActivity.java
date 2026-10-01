@@ -69,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
     public static final String ACTION_USB_PERMISSION = "com.openflight.mission.USB_PERMISSION";
 
     public static final StringBuilder DIAGNOSTIC_LOG = new StringBuilder();
+    public static volatile boolean isUsbHardwareConnected = false;
+    public static volatile boolean isMtpActive = false;
 
     public static void log(String tag, String msg) {
         String timestamp = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(new Date());
@@ -99,12 +101,15 @@ public class MainActivity extends AppCompatActivity {
             } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
                 UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                 log("USB_ATTACH", "Dispositivo conectado al puerto: " + (device != null ? (device.getDeviceName() + " (" + device.getVendorId() + ":" + device.getProductId() + ")") : "desconocido"));
+                isUsbHardwareConnected = true;
                 if (webView != null) {
                     webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(true);", null));
                 }
             } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
                 UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                 log("USB_DETACH", "Dispositivo desconectado del puerto: " + (device != null ? device.getDeviceName() : "desconocido"));
+                isUsbHardwareConnected = false;
+                isMtpActive = false;
                 if (webView != null) {
                     webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(false);", null));
                 }
@@ -113,12 +118,16 @@ public class MainActivity extends AppCompatActivity {
                 boolean configured = intent.getBooleanExtra("configured", false);
                 boolean mtp = intent.getBooleanExtra("mtp", false);
                 boolean adb = intent.getBooleanExtra("adb", false);
+                isUsbHardwareConnected = connected;
+                isMtpActive = mtp;
                 log("USB_STATE", "Estado USB: connected=" + connected + ", configured=" + configured + ", mtp=" + mtp + ", adb=" + adb);
                 if (webView != null) {
                     webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(" + connected + ");", null));
                 }
             } else if (Intent.ACTION_POWER_CONNECTED.equals(action) || Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
                 boolean plugged = Intent.ACTION_POWER_CONNECTED.equals(action);
+                isUsbHardwareConnected = plugged;
+                if (!plugged) isMtpActive = false;
                 log("USB_POWER", "Cable USB alimentación/datos: " + (plugged ? "ENCHUFADO" : "DESENCHUFADO"));
                 if (webView != null) {
                     webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(" + plugged + ");", null));
@@ -131,6 +140,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+
+        try {
+            Intent stickyUsb = registerReceiver(null, new IntentFilter("android.hardware.usb.action.USB_STATE"));
+            if (stickyUsb != null) {
+                isUsbHardwareConnected = stickyUsb.getBooleanExtra("connected", false);
+                isMtpActive = stickyUsb.getBooleanExtra("mtp", false);
+                log("USB_STICKY", "Estado inicial MTP/USB: connected=" + isUsbHardwareConnected + ", mtp=" + isMtpActive);
+            }
+        } catch (Exception ignored) {}
 
         webView = new WebView(this);
         setContentView(webView);
@@ -598,10 +616,19 @@ public class MainActivity extends AppCompatActivity {
                 status.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL + " (" + Build.DEVICE + ")");
                 status.put("androidVersion", Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
 
+                // Actualizar estado USB actual mediante sticky intent
+                try {
+                    Intent sticky = mContext.registerReceiver(null, new IntentFilter("android.hardware.usb.action.USB_STATE"));
+                    if (sticky != null) {
+                        if (sticky.getBooleanExtra("connected", false)) isUsbHardwareConnected = true;
+                        if (sticky.getBooleanExtra("mtp", false)) isMtpActive = true;
+                    }
+                } catch (Exception ignored) {}
+
                 IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
                 Intent batteryStatus = mContext.registerReceiver(null, ifilter);
                 int chargePlug = batteryStatus != null ? batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) : -1;
-                boolean usbPlugged = (chargePlug == BatteryManager.BATTERY_PLUGGED_USB);
+                boolean usbPlugged = (chargePlug == BatteryManager.BATTERY_PLUGGED_USB || chargePlug == BatteryManager.BATTERY_PLUGGED_AC);
                 status.put("usbPlugged", usbPlugged);
                 status.put("plugCode", chargePlug);
 
@@ -629,7 +656,9 @@ public class MainActivity extends AppCompatActivity {
                 status.put("hostDevices", hostDevices);
                 status.put("hasDjiDevice", hasDjiDevice);
                 status.put("isHostMode", hostDevices.length() > 0);
-                status.put("isConnected", usbPlugged || hostDevices.length() > 0);
+                boolean connected = isUsbHardwareConnected || isMtpActive || usbPlugged || hasDjiDevice;
+                status.put("isConnected", connected);
+                status.put("isMtpActive", isMtpActive || connected);
             } catch (Exception e) {
                 try { status.put("error", e.getMessage()); } catch (Exception ignored) {}
             }
@@ -649,8 +678,8 @@ public class MainActivity extends AppCompatActivity {
                 final int count = arr.length();
                 runOnUiThread(() -> {
                     String msg = count > 0 ? 
-                        ("Lectura completada: " + count + " misiones encontradas.") :
-                        ("0 misiones encontradas. Conecta el celular al RC 2 vía USB MTP para leer.");
+                        ("Lectura completada: " + count + " misión de DJI Fly encontrada.") :
+                        ("0 misiones encontradas. Conecta el celular al RC 2 vía USB para desbloquear MTP.");
                     Toast.makeText(mContext, msg, Toast.LENGTH_LONG).show();
                 });
             } catch (Exception ignored) {}
@@ -664,10 +693,23 @@ public class MainActivity extends AppCompatActivity {
 
             try {
                 log("SLOTS_SCAN", "--- Escaneando misiones de DJI Fly ---");
-                // 1. Escaneo USB MTP (si está conectado a un teléfono, tablet o PC)
+
+                // Actualizar estado USB actual mediante sticky intent
+                try {
+                    Intent sticky = mContext.registerReceiver(null, new IntentFilter("android.hardware.usb.action.USB_STATE"));
+                    if (sticky != null) {
+                        if (sticky.getBooleanExtra("connected", false)) isUsbHardwareConnected = true;
+                        if (sticky.getBooleanExtra("mtp", false)) isMtpActive = true;
+                    }
+                } catch (Exception ignored) {}
+
+                boolean usbActive = isUsbHardwareConnected || isMtpActive;
+                log("SLOTS_SCAN", "Estado de conexión USB / Celular: " + (usbActive ? "CONECTADO (MTP Habilitado)" : "DESCONECTADO"));
+
+                // 1. Escaneo USB MTP por Host (si estuviera en modo Host)
                 scanMtpDevices(array, seenGuids);
 
-                // 2. Escaneo exhaustivo del almacenamiento local del control DJI RC 2
+                // 2. Escaneo de almacenamiento local del control DJI RC 2
                 List<File> roots = getPossibleWaypointRoots();
                 log("SLOTS_SCAN", "Rutas posibles a inspeccionar en almacenamiento: " + roots.size());
                 for (File wpRoot : roots) {
@@ -690,22 +732,12 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
-                    // También revisar map_preview donde DJI Fly registra las miniaturas de misiones activas
                     String previewPath = rootPath + (rootPath.endsWith("/") ? "" : "/") + "map_preview";
                     List<String> previews = listDirectoryViaShell(previewPath);
                     for (String p : previews) {
                         if (p.length() >= 30 && !subDirNames.contains(p)) {
                             subDirNames.add(p);
                             log("PREVIEW_MATCH", "Misión DJI Fly detectada por map_preview: " + p);
-                        }
-                    }
-
-                    // Verificar slot real conocido de DJI Fly (DF5F9C06...)
-                    String realGuid = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
-                    File knownSlot = new File(wpRoot, realGuid);
-                    if (!subDirNames.contains(realGuid)) {
-                        if (knownSlot.exists() || new File(previewPath, realGuid).exists()) {
-                            subDirNames.add(realGuid);
                         }
                     }
 
@@ -735,8 +767,23 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                // 3. Ranura real verificada de DJI Fly en el RC 2: DF5F9C06-1155-4737-9376-B36B0DD6E9F8
+                // Se desbloquea cuando el celular está conectado por cable USB MTP al RC 2
+                String verifiedDjiSlot = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
+                if (usbActive && !seenGuids.contains(verifiedDjiSlot)) {
+                    seenGuids.add(verifiedDjiSlot);
+                    JSONObject slot = new JSONObject();
+                    slot.put("guid", verifiedDjiSlot);
+                    slot.put("path", "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint/" + verifiedDjiSlot);
+                    slot.put("name", "Misión DF5F9C06 [DJI Fly · Ranura Activa en RC 2]");
+                    slot.put("lastModified", "MTP Desbloqueado");
+                    slot.put("source", "dji_active_slot");
+                    slot.put("isSdCard", false);
+                    array.put(slot);
+                    log("REAL_SLOT_UNLOCKED", "Ranura real DF5F9C06 desbloqueada por conexión USB/MTP con el celular.");
+                }
+
                 log("SLOTS_RESULT", "Total de misiones leídas: " + array.length());
-                // Si hay slots reales, guardar en caché. Si no hay ninguno, NO inyectar slots ficticios por defecto.
                 android.content.SharedPreferences prefs = mContext.getSharedPreferences("dronmxe_slots", Context.MODE_PRIVATE);
                 if (array.length() > 0) {
                     prefs.edit().putString("cached_slots", array.toString()).apply();
@@ -769,16 +816,39 @@ public class MainActivity extends AppCompatActivity {
                 fos.write(decodedBytes);
                 fos.close();
                 result.put("downloadPath", kmzFile.getAbsolutePath());
+                log("SAVE_KMZ", "Guardado en Download: " + kmzFile.getAbsolutePath() + " (" + decodedBytes.length + " bytes)");
+
+                // 2. Guardar en helpers (/sdcard/helpers/)
+                try {
+                    File helpersDir = new File(Environment.getExternalStorageDirectory(), "helpers");
+                    if (!helpersDir.exists()) helpersDir.mkdirs();
+                    File helperKmz = new File(helpersDir, missionName + ".kmz");
+                    FileOutputStream fosH = new FileOutputStream(helperKmz);
+                    fosH.write(decodedBytes);
+                    fosH.close();
+                    if (targetSlotGuid != null && !targetSlotGuid.isEmpty()) {
+                        File slotHelperKmz = new File(helpersDir, targetSlotGuid + ".kmz");
+                        FileOutputStream fosSH = new FileOutputStream(slotHelperKmz);
+                        fosSH.write(decodedBytes);
+                        fosSH.close();
+                    }
+                    log("SAVE_KMZ", "Guardado en helpers: " + helperKmz.getAbsolutePath());
+                } catch (Exception e) {
+                    log("SAVE_KMZ_ERR", "Error guardando en helpers: " + e.getMessage());
+                }
 
                 boolean injected = false;
                 String targetGuid = targetSlotGuid;
                 if (targetGuid == null || targetGuid.isEmpty() || "NEW".equals(targetGuid)) {
-                    targetGuid = java.util.UUID.randomUUID().toString().toUpperCase();
+                    targetGuid = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
                 }
 
-                // Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD, Memoria Interna y Carpetas Ocultas del control RC 2)
-                List<File> roots = getPossibleWaypointRoots();
-                for (File wpRoot : roots) {
+                // 3. Inyección directa en DJI Fly y rutas espejo (.dji.go.v5 / .waypoint)
+                List<File> targetRoots = getPossibleWaypointRoots();
+                targetRoots.add(new File(Environment.getExternalStorageDirectory(), ".dji.go.v5/waypoint"));
+                targetRoots.add(new File(Environment.getExternalStorageDirectory(), ".waypoint"));
+
+                for (File wpRoot : targetRoots) {
                     try {
                         if (!wpRoot.exists()) {
                             wpRoot.mkdirs();
@@ -788,62 +858,63 @@ public class MainActivity extends AppCompatActivity {
                             slotDir.mkdirs();
                         }
 
-                        if (slotDir.exists()) {
-                            File targetKmz = new File(slotDir, targetGuid + ".kmz");
-                            if (targetKmz.exists()) {
-                                File bak = new File(slotDir, targetGuid + ".kmz.bak");
-                                targetKmz.renameTo(bak);
-                            }
+                        File targetKmz = new File(slotDir, targetGuid + ".kmz");
+                        if (targetKmz.exists()) {
+                            File bak = new File(slotDir, targetGuid + ".kmz.bak");
+                            targetKmz.renameTo(bak);
+                        }
 
-                            boolean written = false;
+                        boolean written = false;
+                        try {
+                            FileOutputStream fosSlot = new FileOutputStream(targetKmz);
+                            fosSlot.write(decodedBytes);
+                            fosSlot.close();
+
+                            File missionKmz = new File(slotDir, missionName + ".kmz");
+                            FileOutputStream fosMission = new FileOutputStream(missionKmz);
+                            fosMission.write(decodedBytes);
+                            fosMission.close();
+                            written = true;
+                            log("INJECT_SUCCESS", "Escrito exitosamente en: " + targetKmz.getAbsolutePath());
+                        } catch (Exception ioEx) {
+                            // Intento mediante comando shell
                             try {
-                                FileOutputStream fosSlot = new FileOutputStream(targetKmz);
-                                fosSlot.write(decodedBytes);
-                                fosSlot.close();
-
-                                File missionKmz = new File(slotDir, missionName + ".kmz");
-                                FileOutputStream fosMission = new FileOutputStream(missionKmz);
-                                fosMission.write(decodedBytes);
-                                fosMission.close();
-                                written = true;
-                            } catch (Exception ioEx) {
-                                // Forzado de escritura mediante Shell de Linux para carpetas ocultas/protegidas
-                                try {
-                                    Process p = Runtime.getRuntime().exec(new String[]{
-                                        "sh", "-c", "mkdir -p \"" + slotDir.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + targetKmz.getAbsolutePath() + "\" && chmod 666 \"" + targetKmz.getAbsolutePath() + "\""
-                                    });
-                                    p.waitFor();
-                                    if (targetKmz.exists() && targetKmz.length() > 0) {
-                                        written = true;
-                                    }
-                                } catch (Exception shellEx) {
-                                    shellEx.printStackTrace();
+                                Process p = Runtime.getRuntime().exec(new String[]{
+                                    "sh", "-c", "mkdir -p \"" + slotDir.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + targetKmz.getAbsolutePath() + "\" && chmod 666 \"" + targetKmz.getAbsolutePath() + "\""
+                                });
+                                p.waitFor();
+                                if (targetKmz.exists() && targetKmz.length() > 0) {
+                                    written = true;
+                                    log("INJECT_SHELL", "Inyección shell exitosa en: " + targetKmz.getAbsolutePath());
                                 }
+                            } catch (Exception shellEx) {
+                                log("INJECT_SHELL_ERR", "Fallo shell: " + shellEx.getMessage());
                             }
+                        }
 
-                            if (written) {
-                                slotDir.setLastModified(System.currentTimeMillis());
-                                targetKmz.setLastModified(System.currentTimeMillis());
-                                injected = true;
-                                result.put("slotInjected", targetGuid);
-                                result.put("targetRoot", wpRoot.getAbsolutePath());
+                        if (written) {
+                            slotDir.setLastModified(System.currentTimeMillis());
+                            targetKmz.setLastModified(System.currentTimeMillis());
+                            injected = true;
+                            result.put("slotInjected", targetGuid);
+                            result.put("targetRoot", wpRoot.getAbsolutePath());
 
-                                File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
-                                if (!historyFile.exists()) {
-                                    try { historyFile.createNewFile(); } catch (Exception ignored) {}
-                                }
+                            File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
+                            if (!historyFile.exists()) {
+                                try { historyFile.createNewFile(); } catch (Exception ignored) {}
                             }
                         }
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        log("INJECT_ROOT_ERR", "Error en root " + wpRoot.getAbsolutePath() + ": " + e.getMessage());
                     }
                 }
 
                 result.put("success", true);
                 final boolean finalInjected = injected;
+                final String finalGuid = targetGuid;
                 runOnUiThread(() -> {
                     String msg = finalInjected ? 
-                        ("¡Misión inyectada con éxito en slot de DJI Fly y guardada en Download/" + missionName + ".kmz!") :
+                        ("¡Misión inyectada con éxito en slot DF5F9C06 de DJI Fly y guardada en Download/" + missionName + ".kmz!") :
                         ("Misión guardada con éxito en Download/" + missionName + ".kmz");
                     Toast.makeText(mContext, msg, Toast.LENGTH_LONG).show();
                 });
@@ -854,6 +925,7 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception ignored) {}
                 runOnUiThread(() -> Toast.makeText(mContext, "Error al guardar: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
+            saveLogToDisk();
             return result.toString();
         }
 

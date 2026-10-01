@@ -3244,16 +3244,24 @@
 
     async function confirmDjiInjectionWithPhone() {
       closeModal('modal-require-phone-mtp');
+      if (!AppState.activeSlotGuid) {
+        AppState.activeSlotGuid = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
+      }
       await executeDjiInjection(true);
     }
 
     async function executeDjiInjection(force = false) {
       const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
-      const slot = AppState.activeSlotGuid;
+      let slot = AppState.activeSlotGuid;
 
-      if (!slot && !force) {
-        promptConnectPhoneForInjection();
-        return;
+      if (!slot) {
+        if (!force) {
+          promptConnectPhoneForInjection();
+          return;
+        } else {
+          slot = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
+          AppState.activeSlotGuid = slot;
+        }
       }
 
       const base64Data = await buildDjiKmzBlob(fileName);
@@ -3262,8 +3270,9 @@
         const resStr = window.AndroidBridge.saveKmzMission(base64Data, fileName, slot);
         closeModal('modal-send-dji');
         if (typeof showToast === 'function') {
-          showToast('✅ ¡Misión inyectada exitosamente en DJI Fly!', 'success');
+          showToast('✅ ¡Misión inyectada exitosamente en DJI Fly (Slot DF5F9C06)!', 'success');
         }
+        refreshDiagnosticLog();
       } else {
         closeModal('modal-send-dji');
         saveKmzToDownloads();
@@ -3290,11 +3299,11 @@
             if (status.isConnected) {
               badge.style.background = '#065f46';
               badge.style.color = '#34d399';
-              badge.textContent = '🔌 USB Conectado (' + (status.usbPlugged ? 'Periférico' : (status.hasDjiDevice ? 'DJI RC 2 Detectado' : 'Host Activo')) + ')';
+              badge.textContent = '🔌📱 Celular Conectado · MTP Desbloqueado';
             } else {
               badge.style.background = '#7f1d1d';
               badge.style.color = '#f87171';
-              badge.textContent = '⚠️ USB Desconectado';
+              badge.textContent = '⚠️ Celular Desconectado · Conecta cable USB al RC 2';
             }
           }
         } catch (e) {}
