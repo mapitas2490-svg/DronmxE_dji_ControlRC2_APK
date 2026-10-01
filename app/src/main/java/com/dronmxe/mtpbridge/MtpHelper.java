@@ -54,6 +54,18 @@ public class MtpHelper {
     private final ExecutorService mtpExecutor = Executors.newSingleThreadExecutor();
     private volatile boolean isOpening = false;
     private volatile boolean isScanning = false;
+    private volatile String customWaypointPath = "";
+
+    public void setCustomWaypointPath(String path) {
+        this.customWaypointPath = (path != null) ? path.trim() : "";
+        if (!this.customWaypointPath.isEmpty()) {
+            callback.onLog("[MTP] Ruta de búsqueda personalizada configurada: " + this.customWaypointPath);
+        }
+    }
+
+    public String getCustomWaypointPath() {
+        return customWaypointPath != null ? customWaypointPath : "";
+    }
 
     // Rutas candidatas para misiones en DJI RC 2 / RC Pro / DJI Fly
     private static final String[][] WAYPOINT_PATH_CANDIDATES = new String[][]{
@@ -259,10 +271,21 @@ public class MtpHelper {
                 }
 
                 int waypointHandle = -1;
+                // Intento 0: Ruta personalizada configurada por el usuario
+                if (customWaypointPath != null && !customWaypointPath.trim().isEmpty()) {
+                    String cleanPath = customWaypointPath.trim().replaceAll("^/+|/+$", "");
+                    String[] parts = cleanPath.split("[/\\\\]+");
+                    waypointHandle = findHandleForPath(device, storageId, parts);
+                    if (waypointHandle != -1) {
+                        callback.onLog("[SCAN] ¡Ruta personalizada MTP encontrada!: " + customWaypointPath);
+                    }
+                }
                 // Intento 1: Buscar por rutas predefinidas
-                for (String[] path : WAYPOINT_PATH_CANDIDATES) {
-                    waypointHandle = findHandleForPath(device, storageId, path);
-                    if (waypointHandle != -1) break;
+                if (waypointHandle == -1) {
+                    for (String[] path : WAYPOINT_PATH_CANDIDATES) {
+                        waypointHandle = findHandleForPath(device, storageId, path);
+                        if (waypointHandle != -1) break;
+                    }
                 }
 
                 if (waypointHandle != -1) {

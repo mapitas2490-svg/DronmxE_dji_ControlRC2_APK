@@ -108,6 +108,25 @@
     @media(min-width:661px),(orientation:landscape){.tbar{display:none!important}.panel{display:flex!important}}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin{display:inline-block;animation:spin 1s linear infinite}
+
+    /* MODAL CAMBIAR RUTA */
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px}
+    .modal-card{background:#181a20;border:1px solid #2b2e38;border-radius:10px;width:100%;max-width:480px;box-shadow:0 12px 32px rgba(0,0,0,0.6);overflow:hidden;display:flex;flex-direction:column}
+    .modal-hdr{padding:14px 16px;background:#1e2027;border-bottom:1px solid #2b2e38;display:flex;align-items:center;justify-content:space-between}
+    .modal-hdr h3{font-size:14px;font-weight:700;color:#38bdf8}
+    .btn-close{background:transparent;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px}
+    .modal-body{padding:16px;max-height:70vh;overflow-y:auto}
+    .preset-label{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:0.5px;margin-bottom:8px}
+    .preset-btns{display:flex;flex-direction:column;gap:8px}
+    .pbtn{background:#22252e;border:1px solid #2b2e38;border-radius:6px;padding:9px 12px;color:#fff;text-align:left;font-size:12px;cursor:pointer;transition:all .15s}
+    .pbtn small{color:var(--muted);font-size:10px;display:block;margin-top:2px}
+    .pbtn:hover{background:#2a2e3a;border-color:#38bdf8}
+    .path-input{width:100%;background:#0f1115;border:1px solid #2b2e38;border-radius:6px;padding:10px 12px;color:#fff;font-family:monospace;font-size:12px}
+    .path-input:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 2px rgba(56,189,248,0.2)}
+    .modal-ftr{padding:12px 16px;background:#14161c;border-top:1px solid #2b2e38;display:flex;gap:10px;justify-content:flex-end}
+    .mbtn{padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;border:none}
+    .btn-save{background:linear-gradient(135deg,#0284c7,#38bdf8);color:#000}
+    .btn-reset{background:#272a34;color:var(--muted);border:1px solid #383c4a}
   </style>
 </head>
 <body>
@@ -132,6 +151,7 @@
       <div class="ptitle">🎮 Misiones RC 2 (DJI Fly)</div>
       <div class="hacts">
         <button class="ibtn" title="Refrescar RC 2" onclick="refreshDeviceSlots()">↻</button>
+        <button class="ibtn" title="Cambiar Ruta de Búsqueda RC 2" onclick="openPathModal()">⚙️ Ruta</button>
         <button class="ibtn" title="Descargar al celular" onclick="downloadSelectedDeviceSlot()">⬇ Descargar</button>
       </div>
     </div>
@@ -232,8 +252,9 @@ function onLogMessage(msg){ appendLog(msg); }
 function updateSyncBtn(){
   const hasLocal = !!S.selLocalMission;
   const hasDevice = !!S.selDeviceGuid;
-  document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice);
-  document.getElementById('btn-new').disabled = !hasLocal;
+  const isConnected = !!S.connected;
+  document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice && isConnected);
+  document.getElementById('btn-new').disabled = !(hasLocal && isConnected);
 }
 
 function switchTab(tab){
@@ -254,7 +275,9 @@ function renderDeviceSlots(){
     } else {
       c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Presiona el botón "➕ CREAR NUEVA MISIÓN EN RC 2" para transferir una.</small></div>';
     }
+    S.selDeviceGuid = null;
     document.getElementById('dst-slot').textContent = 'Sin ranura seleccionada';
+    updateSyncBtn();
     return;
   }
 
@@ -316,7 +339,9 @@ function renderLocalMissions(){
 
   if(!missions || missions.length === 0){
     c.innerHTML = '<div class="empty">📂 No se encontraron archivos .kmz<br><small style="color:var(--muted)">Guarda archivos .kmz en /sdcard/Download o usa "📂 Abrir".</small></div>';
+    S.selLocalMission = null;
     document.getElementById('src-name').textContent = 'Ninguna';
+    updateSyncBtn();
     return;
   }
 
@@ -618,10 +643,83 @@ function deleteDeviceSlotItem(guid, displayName, e){
   }
 }
 
+function openPathModal(){
+  var cur = (window.AndroidBridge && window.AndroidBridge.getCustomRc2Path) ? window.AndroidBridge.getCustomRc2Path() : '';
+  document.getElementById('rc2-path-input').value = cur || 'Android/data/dji.go.v5/files/Waypoint';
+  document.getElementById('path-modal').style.display = 'flex';
+}
+
+function closePathModal(){
+  document.getElementById('path-modal').style.display = 'none';
+}
+
+function setPresetPath(path){
+  document.getElementById('rc2-path-input').value = path;
+}
+
+function saveCustomPath(){
+  var val = document.getElementById('rc2-path-input').value.trim();
+  if(window.AndroidBridge && window.AndroidBridge.setCustomRc2Path){
+    window.AndroidBridge.setCustomRc2Path(val);
+  }
+  closePathModal();
+  refreshDeviceSlots();
+}
+
+function resetPathToDefault(){
+  if(window.AndroidBridge && window.AndroidBridge.setCustomRc2Path){
+    window.AndroidBridge.setCustomRc2Path('');
+  }
+  document.getElementById('rc2-path-input').value = '';
+  closePathModal();
+  refreshDeviceSlots();
+}
+
 window.onload = function(){
   switchTab('dev');
   refreshAll();
 };
 </script>
+
+<!-- MODAL CAMBIAR RUTA RC 2 -->
+<div class="modal-overlay" id="path-modal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <h3>⚙️ Seleccionar Ruta MTP en RC 2</h3>
+      <button class="btn-close" onclick="closePathModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Selecciona una carpeta predefinida de DJI o ingresa una ruta personalizada donde tu control guarda las misiones:
+      </p>
+      
+      <div class="preset-label">RUTAS PREDEFINIDAS RÁPIDAS:</div>
+      <div class="preset-btns">
+        <button class="pbtn" onclick="setPresetPath('Android/data/dji.go.v5/files/Waypoint')">
+          🎮 <b>DJI Fly (RC 2 / Mini 4 Pro / Air 3)</b><br><small>Android/data/dji.go.v5/files/Waypoint</small>
+        </button>
+        <button class="pbtn" onclick="setPresetPath('Android/data/com.dji.industry.pilot/files/Waypoint')">
+          🛩️ <b>DJI Pilot 2 (Enterprise / Matrice 300/350)</b><br><small>Android/data/com.dji.industry.pilot/files/Waypoint</small>
+        </button>
+        <button class="pbtn" onclick="setPresetPath('DJI/waypoint')">
+          📦 <b>DJI General / Legacy</b><br><small>DJI/waypoint</small>
+        </button>
+        <button class="pbtn" onclick="setPresetPath('Download')">
+          📥 <b>Carpeta Descargas RC 2</b><br><small>Download</small>
+        </button>
+      </div>
+
+      <div class="preset-label" style="margin-top:14px">RUTA PERSONALIZADA EN EL RC 2:</div>
+      <div class="input-group">
+        <input type="text" id="rc2-path-input" class="path-input" placeholder="Ej. Android/data/dji.go.v5/files/Waypoint" />
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button class="mbtn btn-reset" onclick="resetPathToDefault()">Restablecer Todo</button>
+      <button class="mbtn btn-save" onclick="saveCustomPath()">Aplicar y Escanear RC 2</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

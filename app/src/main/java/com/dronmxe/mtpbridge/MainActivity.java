@@ -514,6 +514,18 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         }
 
         @JavascriptInterface
+        public void setCustomRc2Path(String pathStr) {
+            if (mtpHelper != null) {
+                mtpHelper.setCustomWaypointPath(pathStr);
+            }
+        }
+
+        @JavascriptInterface
+        public String getCustomRc2Path() {
+            return (mtpHelper != null) ? mtpHelper.getCustomWaypointPath() : "";
+        }
+
+        @JavascriptInterface
         public void pickFile() {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
