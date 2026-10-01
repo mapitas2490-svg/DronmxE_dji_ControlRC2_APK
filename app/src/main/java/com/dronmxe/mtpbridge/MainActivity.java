@@ -56,7 +56,12 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         super.onCreate(savedInstanceState);
 
         webView = new WebView(this);
+        webView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(webView);
+
+        WebView.setWebContentsDebuggingEnabled(true);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -84,8 +89,10 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         // Handle incoming intent
         handleIncomingIntent(getIntent());
 
-        // Connect USB
-        mtpHelper.findAndConnectDevice();
+        // Connect USB off UI thread
+        new Thread(() -> {
+            mtpHelper.findAndConnectDevice();
+        }).start();
     }
 
     @Override
@@ -204,6 +211,9 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     obj.put("dateModified", s.dateModified);
                     obj.put("size", s.size);
                     obj.put("wpCount", s.wpCount);
+                    if (s.base64 != null && !s.base64.isEmpty()) {
+                        obj.put("base64", s.base64);
+                    }
                     arr.put(obj);
                 }
                 return arr.toString();

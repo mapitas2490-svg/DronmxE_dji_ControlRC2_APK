@@ -206,6 +206,7 @@ public class MtpHelper {
         public int folderHandle = -1;
         public int storageId = 0;
         public int wpCount = 0;
+        public String base64 = "";
     }
 
     private static class KmzParsedInfo {
@@ -251,11 +252,27 @@ public class MtpHelper {
             }
         }
 
-        // Count Placemarks
-        int count = 0, idx = 0;
-        while ((idx = xml.indexOf("<Placemark", idx)) != -1) { count++; idx += 10; }
-        info.wpCount = count;
+        // Count Placemarks, wpml:waypoint, wpml:executeHeight, coordinates
+        int pmCount = 0, idx = 0;
+        while ((idx = xml.indexOf("<Placemark", idx)) != -1) { pmCount++; idx += 10; }
+        
+        int wpmlWpCount = 0; idx = 0;
+        while ((idx = xml.indexOf("<wpml:waypoint", idx)) != -1) { wpmlWpCount++; idx += 14; }
 
+        int hCount = 0; idx = 0;
+        while ((idx = xml.indexOf("<wpml:executeHeight", idx)) != -1) { hCount++; idx += 19; }
+
+        int coordCount = 0;
+        java.util.regex.Pattern pCoord = java.util.regex.Pattern.compile("<coordinates>([\\s\\S]*?)</coordinates>", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher mCoord = pCoord.matcher(xml);
+        while (mCoord.find()) {
+            String[] pts = mCoord.group(1).trim().split("\\s+");
+            for (String p : pts) {
+                if (p.contains(",")) coordCount++;
+            }
+        }
+
+        info.wpCount = Math.max(Math.max(pmCount, wpmlWpCount), Math.max(hCount, coordCount));
         return info;
     }
 
@@ -391,6 +408,9 @@ public class MtpHelper {
                                                 if (parsed.missionName != null && !parsed.missionName.isEmpty()) {
                                                     slot.displayName = parsed.missionName;
                                                 }
+                                                if (data.length < 3500000) {
+                                                    slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+                                                }
                                             }
                                         } catch (Exception ex) {
                                             callback.onLog("[WARN] No se pudo parsear " + fname + ": " + ex.getMessage());
@@ -432,6 +452,9 @@ public class MtpHelper {
                                         if (parsed.updateTime > 0) slot.dateModified = parsed.updateTime;
                                         if (parsed.missionName != null && !parsed.missionName.isEmpty()) {
                                             slot.displayName = parsed.missionName;
+                                        }
+                                        if (data.length < 3500000) {
+                                            slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
                                         }
                                     }
                                 } catch (Exception ignored) {}
