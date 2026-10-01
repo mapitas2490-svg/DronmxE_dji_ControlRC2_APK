@@ -1,18 +1,23 @@
 package com.dronmxe.mtpbridge;
 
-import android.content.ContentUris;
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Base64;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -20,7 +25,10 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -32,12 +40,18 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements MtpHelper.LogCallback {
 
+    private static final String TAG = "MainActivity";
     private WebView webView;
     private MtpHelper mtpHelper;
     private final List<File> availableKmzFiles = new ArrayList<>();
+    private boolean isPageLoaded = false;
+    private final List<String> pendingJsCalls = new ArrayList<>();
+    private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
     private final ActivityResultLauncher<Intent> filePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -45,7 +59,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     Uri uri = result.getData().getData();
                     if (uri != null) {
-                        handleSelectedUri(uri);
+                        ioExecutor.execute(() -> handleSelectedUri(uri));
                     }
                 }
             }
@@ -78,17 +92,56 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                isPageLoaded = true;
+                Log.d(TAG, "Page finished loading: " + url);
+                flushPendingJs();
                 notifyJs("refreshAll();");
             }
         });
 
         mtpHelper = new MtpHelper(this, this);
-
         webView.loadUrl("file:///android_asset/index.html");
 
-        // Handle incoming intent
         handleIncomingIntent(getIntent());
+        checkAndRequestPermissions();
+    }
 
+    private synchronized void flushPendingJs() {
+        runOnUiThread(() -> {
+            for (String script : pendingJsCalls) {
+                webView.evaluateJavascript(script, null);
+            }
+            pendingJsCalls.clear();
+        });
+    }
+
+    private void checkAndRequestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    intent.addCategory("android.intent.category.DEFAULT");
+                    intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Intent intent = new Intent();
+                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivity(intent);
+                }
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, 100);
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
         // Connect USB off UI thread
         new Thread(() -> {
             mtpHelper.findAndConnectDevice();
@@ -108,24 +161,27 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         if (Intent.ACTION_SEND.equals(action)) {
             Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
             if (uri != null) {
-                handleSelectedUri(uri);
+                ioExecutor.execute(() -> handleSelectedUri(uri));
             }
         } else if (Intent.ACTION_VIEW.equals(action)) {
             Uri uri = intent.getData();
             if (uri != null) {
-                handleSelectedUri(uri);
+                ioExecutor.execute(() -> handleSelectedUri(uri));
             }
         }
     }
 
     private void handleSelectedUri(Uri uri) {
         try {
-            String displayName = "mision_recibida.kmz";
-            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-            if (cursor != null && cursor.moveToFirst()) {
-                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (nameIndex != -1) displayName = cursor.getString(nameIndex);
-                cursor.close();
+            String displayName = "mision_" + System.currentTimeMillis() + ".kmz";
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) {
+                        String realName = cursor.getString(nameIndex);
+                        if (realName != null && !realName.isEmpty()) displayName = realName;
+                    }
+                }
             }
 
             File tempFile = new File(getCacheDir(), displayName);
@@ -138,8 +194,10 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
             }
 
-            if (!availableKmzFiles.contains(tempFile)) {
-                availableKmzFiles.add(0, tempFile);
+            synchronized (availableKmzFiles) {
+                if (!availableKmzFiles.contains(tempFile)) {
+                    availableKmzFiles.add(0, tempFile);
+                }
             }
 
             notifyJs("refreshLocalMissions();");
@@ -155,6 +213,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         if (mtpHelper != null) {
             mtpHelper.unregister();
         }
+        ioExecutor.shutdown();
     }
 
     @Override
@@ -173,9 +232,15 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         });
     }
 
-    private void notifyJs(String script) {
+    private synchronized void notifyJs(String script) {
         if (webView != null) {
-            webView.post(() -> webView.evaluateJavascript(script, null));
+            runOnUiThread(() -> {
+                if (isPageLoaded) {
+                    webView.evaluateJavascript(script, null);
+                } else {
+                    pendingJsCalls.add(script);
+                }
+            });
         }
     }
 
@@ -233,53 +298,45 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public String getLocalMissionsJson() {
             try {
-                availableKmzFiles.clear();
-                List<File> searchDirs = new ArrayList<>();
-                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
-                searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
-                searchDirs.add(new File("/sdcard/Download"));
-                searchDirs.add(new File("/sdcard/Download/dronmxE"));
-                searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
-                searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
-                searchDirs.add(new File("/sdcard/Documents"));
-                searchDirs.add(getExternalFilesDir(null));
+                synchronized (availableKmzFiles) {
+                    availableKmzFiles.clear();
+                    List<File> searchDirs = new ArrayList<>();
+                    searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+                    searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
+                    searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
+                    searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
+                    searchDirs.add(getExternalFilesDir(null));
+                    searchDirs.add(getCacheDir());
 
-                for (File dir : searchDirs) {
-                    if (dir != null && dir.exists() && dir.isDirectory()) {
-                        File[] list = dir.listFiles((d, name) -> name != null && name.toLowerCase().endsWith(".kmz"));
-                        if (list != null) {
-                            for (File f : list) {
-                                boolean duplicate = false;
-                                for (File existing : availableKmzFiles) {
-                                    if (existing.getName().equalsIgnoreCase(f.getName())) {
-                                        duplicate = true;
-                                        break;
+                    for (File dir : searchDirs) {
+                        if (dir != null && dir.exists() && dir.isDirectory()) {
+                            File[] list = dir.listFiles((d, name) -> name != null && name.toLowerCase().endsWith(".kmz"));
+                            if (list != null) {
+                                for (File f : list) {
+                                    boolean duplicate = false;
+                                    for (File existing : availableKmzFiles) {
+                                        if (existing.getName().equalsIgnoreCase(f.getName()) && existing.length() == f.length()) {
+                                            duplicate = true;
+                                            break;
+                                        }
                                     }
-                                }
-                                if (!duplicate) {
-                                    availableKmzFiles.add(f);
+                                    if (!duplicate) {
+                                        availableKmzFiles.add(f);
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Fallback to MediaStore query for Android Scoped Storage
-                try {
-                    Uri collection = MediaStore.Files.getContentUri("external");
-                    String[] projection = new String[]{
-                            MediaStore.Files.FileColumns._ID,
-                            MediaStore.Files.FileColumns.DISPLAY_NAME,
-                            MediaStore.Files.FileColumns.DATA,
-                            MediaStore.Files.FileColumns.SIZE,
-                            MediaStore.Files.FileColumns.DATE_MODIFIED
-                    };
-                    String selection = MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE '%.kmz'";
-                    try (Cursor cursor = getContentResolver().query(collection, projection, selection, null, MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC")) {
-                        if (cursor != null) {
-                            int dataIdx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-                            while (cursor.moveToNext()) {
-                                if (dataIdx != -1) {
+                    // MediaStore scan
+                    try {
+                        Uri collection = MediaStore.Files.getContentUri("external");
+                        String[] projection = {MediaStore.Files.FileColumns.DATA};
+                        String selection = MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE '%.kmz'";
+                        try (Cursor cursor = getContentResolver().query(collection, projection, selection, null, null)) {
+                            if (cursor != null) {
+                                int dataIdx = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
+                                while (cursor.moveToNext()) {
                                     String path = cursor.getString(dataIdx);
                                     if (path != null) {
                                         File f = new File(path);
@@ -296,71 +353,72 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                                 }
                             }
                         }
-                    }
-                } catch (Exception ignored) {}
+                    } catch (Exception ignored) {}
 
-                Collections.sort(availableKmzFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                    Collections.sort(availableKmzFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
 
-                JSONArray arr = new JSONArray();
-                for (File f : availableKmzFiles) {
-                    JSONObject obj = new JSONObject();
-                    obj.put("name", f.getName());
-                    obj.put("path", f.getAbsolutePath());
-                    obj.put("size", f.length());
-                    obj.put("dateModified", f.lastModified());
-
-                    String tag = "dronmxE";
-                    if (f.getParent() != null) {
-                        tag = new File(f.getParent()).getName();
-                    }
-                    obj.put("tag", tag);
-
-                    // Read first 3.5MB base64 for waypoint preview parser
-                    if (f.length() < 3500000) {
-                        try (FileInputStream fis = new FileInputStream(f);
-                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
-                            byte[] buffer = new byte[8192];
-                            int bytesRead;
-                            while ((bytesRead = fis.read(buffer)) != -1) {
-                                baos.write(buffer, 0, bytesRead);
-                            }
-                            obj.put("base64", Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP));
-                        } catch (Exception ignored) {}
-                    }
-                    arr.put(obj);
-                }
-
-                // --- Also scan RC2 Download folder via MTP ---
-                try {
-                    List<MtpHelper.RemoteKmzFile> remoteKmzFiles = mtpHelper.scanDownloadKmzFiles();
-                    for (MtpHelper.RemoteKmzFile rk : remoteKmzFiles) {
-                        // Skip if already in local list (same name)
-                        boolean alreadyHave = false;
-                        for (File f : availableKmzFiles) {
-                            if (f.getName().equalsIgnoreCase(rk.name)) { alreadyHave = true; break; }
-                        }
-                        if (alreadyHave) continue;
-
+                    JSONArray arr = new JSONArray();
+                    for (File f : availableKmzFiles) {
                         JSONObject obj = new JSONObject();
-                        obj.put("name", rk.name);
-                        obj.put("path", "mtp://rc2/Download/" + rk.name);
-                        obj.put("size", rk.size);
-                        obj.put("dateModified", rk.dateModified);
-                        obj.put("tag", "RC2-Download");
-                        obj.put("remoteHandle", rk.handle);
+                        obj.put("name", f.getName());
+                        obj.put("path", f.getAbsolutePath());
+                        obj.put("size", f.length());
+                        obj.put("dateModified", f.lastModified());
 
-                        // Read KMZ bytes via MTP for base64 (limit 3MB)
-                        if (rk.size > 0 && rk.size < 3000000) {
-                            String b64 = mtpHelper.readSlotKmzBase64(rk.handle, (int) rk.size);
-                            if (b64 != null && !b64.isEmpty()) {
-                                obj.put("base64", b64);
-                            }
+                        String tag = "Teléfono";
+                        if (f.getParent() != null) {
+                            String parent = new File(f.getParent()).getName();
+                            if (parent.equals("cache")) tag = "Compartido";
+                            else if (parent.equalsIgnoreCase("Download")) tag = "Descargas";
+                            else if (parent.equalsIgnoreCase("dronmxE")) tag = "dronmxE";
+                            else tag = parent;
+                        }
+                        obj.put("tag", tag);
+
+                        if (f.length() < 3500000) {
+                            try (FileInputStream fis = new FileInputStream(f);
+                                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+                                byte[] buffer = new byte[8192];
+                                int bytesRead;
+                                while ((bytesRead = fis.read(buffer)) != -1) {
+                                    baos.write(buffer, 0, bytesRead);
+                                }
+                                obj.put("base64", Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP));
+                            } catch (Exception ignored) {}
                         }
                         arr.put(obj);
                     }
-                } catch (Exception ignored) {}
 
-                return arr.toString();
+                    // Scan RC2 Download folder via MTP
+                    try {
+                        List<MtpHelper.RemoteKmzFile> remoteKmzFiles = mtpHelper.scanDownloadKmzFiles();
+                        for (MtpHelper.RemoteKmzFile rk : remoteKmzFiles) {
+                            boolean alreadyHave = false;
+                            for (File f : availableKmzFiles) {
+                                if (f.getName().equalsIgnoreCase(rk.name)) { alreadyHave = true; break; }
+                            }
+                            if (alreadyHave) continue;
+
+                            JSONObject obj = new JSONObject();
+                            obj.put("name", rk.name);
+                            obj.put("path", "mtp://rc2/Download/" + rk.name);
+                            obj.put("size", rk.size);
+                            obj.put("dateModified", rk.dateModified);
+                            obj.put("tag", "RC2-Download");
+                            obj.put("remoteHandle", rk.handle);
+
+                            if (rk.size > 0 && rk.size < 3000000) {
+                                String b64 = mtpHelper.readSlotKmzBase64(rk.handle, (int) rk.size);
+                                if (b64 != null && !b64.isEmpty()) {
+                                    obj.put("base64", b64);
+                                }
+                            }
+                            arr.put(obj);
+                        }
+                    } catch (Exception ignored) {}
+
+                    return arr.toString();
+                }
             } catch (Exception e) {
                 return "[]";
             }
@@ -377,10 +435,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public boolean overwriteSlotFromLocal(String slotGuid, String localFileName) {
             File targetFile = null;
-            for (File f : availableKmzFiles) {
-                if (f.getName().equals(localFileName)) {
-                    targetFile = f;
-                    break;
+            synchronized (availableKmzFiles) {
+                for (File f : availableKmzFiles) {
+                    if (f.getName().equals(localFileName)) {
+                        targetFile = f; break;
+                    }
                 }
             }
 
@@ -420,7 +479,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
 
                 if (kmzHandle <= 0) {
-                    showToast("No se encontró el archivo KMZ en la ranura seleccionada.");
+                    showToast("No se encontró el archivo KMZ en el control.");
                     return;
                 }
 
@@ -429,6 +488,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     try {
                         byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
                         File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                        if (!downloads.exists()) downloads.mkdirs();
                         File out = new File(downloads, slotGuid + ".kmz");
                         try (FileOutputStream fos = new FileOutputStream(out)) {
                             fos.write(bytes);
@@ -446,7 +506,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
         @JavascriptInterface
         public void refreshUsb() {
-            mtpHelper.findAndConnectDevice();
+            new Thread(() -> mtpHelper.findAndConnectDevice()).start();
         }
 
         @JavascriptInterface
@@ -462,10 +522,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public boolean createNewSlotFromLocal(String localFileName) {
             File targetFile = null;
-            for (File f : availableKmzFiles) {
-                if (f.getName().equals(localFileName)) {
-                    targetFile = f;
-                    break;
+            synchronized (availableKmzFiles) {
+                for (File f : availableKmzFiles) {
+                    if (f.getName().equals(localFileName)) {
+                        targetFile = f; break;
+                    }
                 }
             }
 
@@ -483,7 +544,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         showToast("🎉 ¡Nueva misión creada con éxito en RC 2!");
                         notifyJs("refreshDeviceSlots();");
                     } else {
-                        showToast("Error creando nueva misión MTP. Revisa el log.");
+                        showToast("Error creando nueva misión MTP.");
                     }
                 });
             }).start();
@@ -495,15 +556,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             boolean deletedAny = false;
             List<File> toRemove = new ArrayList<>();
 
-            // 1. Delete physical files from all search directories matching localFileName
             List<File> searchDirs = new ArrayList<>();
             searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
             searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
-            searchDirs.add(new File("/sdcard/Download"));
-            searchDirs.add(new File("/sdcard/Download/dronmxE"));
             searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
             searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
-            searchDirs.add(new File("/sdcard/Documents"));
             searchDirs.add(getExternalFilesDir(null));
             searchDirs.add(getCacheDir());
 
@@ -513,8 +570,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     if (files != null) {
                         for (File f : files) {
                             if (f.exists()) {
-                                boolean ok = f.delete();
-                                if (ok) {
+                                if (f.delete()) {
                                     deletedAny = true;
                                     toRemove.add(f);
                                 }
@@ -524,38 +580,27 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
             }
 
-            for (File f : availableKmzFiles) {
-                if (f.getName().equalsIgnoreCase(localFileName)) {
-                    if (f.exists()) {
-                        if (f.delete()) deletedAny = true;
+            synchronized (availableKmzFiles) {
+                for (File f : availableKmzFiles) {
+                    if (f.getName().equalsIgnoreCase(localFileName)) {
+                        if (f.exists()) f.delete();
+                        toRemove.add(f);
                     }
-                    toRemove.add(f);
                 }
+                availableKmzFiles.removeAll(toRemove);
             }
-            availableKmzFiles.removeAll(toRemove);
 
-            // 2. Also remove record from Android MediaStore ContentResolver
             try {
                 Uri collection = MediaStore.Files.getContentUri("external");
-                int count = getContentResolver().delete(collection, MediaStore.Files.FileColumns.DISPLAY_NAME + "=?", new String[]{localFileName});
-                if (count > 0) deletedAny = true;
-            } catch (Exception ignored) {}
-
-            // 3. Broadcast MediaScanner to refresh system indexes
-            try {
-                android.media.MediaScannerConnection.scanFile(MainActivity.this, new String[]{
-                        new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), localFileName).getAbsolutePath()
-                }, null, null);
+                getContentResolver().delete(collection, MediaStore.Files.FileColumns.DISPLAY_NAME + "=?", new String[]{localFileName});
             } catch (Exception ignored) {}
 
             if (deletedAny || toRemove.size() > 0) {
-                showToast("🗑️ Archivo " + localFileName + " eliminado del almacenamiento.");
+                showToast("🗑️ Archivo eliminado.");
                 triggerHaptic();
                 notifyJs("refreshLocalMissions();");
                 return true;
             }
-
-            showToast("No se pudo eliminar de disco: " + localFileName);
             return false;
         }
 
@@ -566,10 +611,10 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 runOnUiThread(() -> {
                     if (ok) {
                         triggerHaptic();
-                        showToast("🗑️ Misión " + slotGuid + " eliminada del RC 2.");
+                        showToast("🗑️ Misión eliminada del RC 2.");
                         notifyJs("refreshDeviceSlots();");
                     } else {
-                        showToast("Fallo al eliminar ranura del RC 2.");
+                        showToast("Fallo al eliminar misión del RC 2.");
                     }
                 });
             }).start();
