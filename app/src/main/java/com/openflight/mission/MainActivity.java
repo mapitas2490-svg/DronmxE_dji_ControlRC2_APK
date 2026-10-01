@@ -303,92 +303,27 @@ public class MainActivity extends AppCompatActivity {
             List<File> roots = new ArrayList<>();
             File ext = Environment.getExternalStorageDirectory();
 
-            // 1. Memoria interna estándar y carpetas ocultas de DJI
-            File[] internalCandidates = new File[]{
-                new File(ext, "Android/data/dji.go.v5/files/waypoint"),
-                new File(ext, "Android/data/dji.go.v5/files/.waypoint"),
-                new File(ext, "Android/data/dji.go.v5/files/.waypoint_history"),
-                new File(ext, "Android/data/dji.go.v5/files/Waypoint"),
-                new File(ext, "DJI/dji.go.v5/files/waypoint"),
-                new File(ext, "DJI/dji.go.v5/files/.waypoint"),
-                new File(ext, ".dji/waypoint"),
-                new File(ext, ".dji.go.v5/waypoint"),
-                new File(ext, ".waypoint"),
-                new File(ext, "Android/media/dji.go.v5/files/waypoint"),
-                new File(ext, "Android/data/dji.go.v5/files/FlightRecord")
-            };
-            for (File c : internalCandidates) {
-                if (!roots.contains(c)) roots.add(c);
-            }
+            // 1. Memoria interna oficial de DJI Fly (la única donde DJI Fly guarda misiones)
+            roots.add(new File("/storage/emulated/0/Android/data/dji.go.v5/files/waypoint"));
+            roots.add(new File(ext, "Android/data/dji.go.v5/files/waypoint"));
 
-            // 2. Tarjetas SD montadas en /storage/ (y carpetas ocultas en SD)
+            // 2. Tarjetas SD montadas (únicamente si tienen la estructura oficial de DJI Fly)
             try {
                 File storage = new File("/storage");
                 if (storage.exists() && storage.isDirectory()) {
                     File[] mounts = storage.listFiles();
-                    if (mounts == null || mounts.length == 0) {
-                        List<String> shMounts = listDirectoryViaShell("/storage");
-                        List<File> temp = new ArrayList<>();
-                        for (String sm : shMounts) temp.add(new File(storage, sm));
-                        mounts = temp.toArray(new File[0]);
-                    }
                     if (mounts != null) {
                         for (File m : mounts) {
                             if (m.isDirectory() && !m.getName().equals("emulated") && !m.getName().equals("self")) {
-                                File[] sdCandidates = new File[]{
-                                    new File(m, "Android/data/dji.go.v5/files/waypoint"),
-                                    new File(m, "Android/data/dji.go.v5/files/.waypoint"),
-                                    new File(m, "Android/media/dji.go.v5/files/waypoint"),
-                                    new File(m, "DJI/dji.go.v5/files/waypoint"),
-                                    new File(m, "DJI/dji.go.v5/files/.waypoint"),
-                                    new File(m, ".dji/waypoint"),
-                                    new File(m, "dji.go.v5/files/waypoint"),
-                                    new File(m, "waypoint"),
-                                    new File(m, ".waypoint")
-                                };
-                                for (File cand : sdCandidates) {
-                                    if (!roots.contains(cand)) roots.add(cand);
+                                File sdWp = new File(m, "Android/data/dji.go.v5/files/waypoint");
+                                if (new File(sdWp, "map_preview").exists() || new File(sdWp, "capability").exists()) {
+                                    roots.add(sdWp);
                                 }
                             }
                         }
                     }
                 }
             } catch (Exception ignored) {}
-
-            // 3. Volúmenes adicionales vía ContextCompat
-            try {
-                File[] extDirs = ContextCompat.getExternalFilesDirs(mContext, null);
-                if (extDirs != null) {
-                    for (File f : extDirs) {
-                        if (f != null) {
-                            String p = f.getAbsolutePath();
-                            int idx = p.indexOf("/Android/");
-                            if (idx > 0) {
-                                String base = p.substring(0, idx);
-                                File[] candList = new File[]{
-                                    new File(base, "Android/data/dji.go.v5/files/waypoint"),
-                                    new File(base, "Android/data/dji.go.v5/files/.waypoint")
-                                };
-                                for (File c : candList) {
-                                    if (!roots.contains(c)) roots.add(c);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ignored) {}
-
-            // 4. Rutas directas habituales de tarjetas MicroSD en DJI RC / Android
-            String[] commonSdRoots = new String[]{
-                "/storage/sdcard1/Android/data/dji.go.v5/files/waypoint",
-                "/mnt/media_rw/Android/data/dji.go.v5/files/waypoint",
-                "/mnt/sdcard/Android/data/dji.go.v5/files/waypoint",
-                "/storage/sdcard0/Android/data/dji.go.v5/files/waypoint"
-            };
-            for (String r : commonSdRoots) {
-                File f = new File(r);
-                if (!roots.contains(f)) roots.add(f);
-            }
 
             return roots;
         }
@@ -736,74 +671,67 @@ public class MainActivity extends AppCompatActivity {
                 List<File> roots = getPossibleWaypointRoots();
                 log("SLOTS_SCAN", "Rutas posibles a inspeccionar en almacenamiento: " + roots.size());
                 for (File wpRoot : roots) {
-                    boolean exists = wpRoot.exists();
-                    boolean isDir = exists && wpRoot.isDirectory();
-                    log("STORAGE_ROOT", wpRoot.getAbsolutePath() + " [Existe=" + exists + ", Dir=" + isDir + ", Lectura=" + wpRoot.canRead() + ", Escritura=" + wpRoot.canWrite() + "]");
-                    if (isDir) {
-                        boolean isSdCard = !wpRoot.getAbsolutePath().startsWith(Environment.getExternalStorageDirectory().getAbsolutePath());
-                        boolean isHidden = wpRoot.getName().startsWith(".") || wpRoot.getAbsolutePath().contains("/.");
-                        String storageLabel;
-                        if (isHidden) {
-                            storageLabel = isSdCard ? " [Tarjeta SD (Oculta) · RC 2]" : " [Memoria Oculta · RC 2]";
-                        } else {
-                            storageLabel = isSdCard ? " [Tarjeta SD · RC 2]" : " [Memoria Interna · RC 2]";
+                    String rootPath = wpRoot.getAbsolutePath();
+                    boolean isSdCard = !rootPath.startsWith(Environment.getExternalStorageDirectory().getAbsolutePath()) && !rootPath.startsWith("/storage/emulated/0");
+                    String storageLabel = isSdCard ? " [Tarjeta SD · RC 2]" : " [DJI Fly · RC 2]";
+                    log("STORAGE_ROOT", "Evaluando ruta oficial: " + rootPath);
+
+                    List<String> subDirNames = new ArrayList<>();
+                    File[] subDirs = wpRoot.listFiles();
+                    if (subDirs != null && subDirs.length > 0) {
+                        for (File sd : subDirs) subDirNames.add(sd.getName());
+                    }
+
+                    if (subDirNames.isEmpty()) {
+                        List<String> shDirs = listDirectoryViaShell(rootPath);
+                        log("SHELL_SCAN", "Shell listó en " + rootPath + ": " + shDirs.size() + " elementos");
+                        for (String s : shDirs) {
+                            if (!subDirNames.contains(s)) subDirNames.add(s);
                         }
+                    }
 
-                        File[] subDirs = wpRoot.listFiles();
-                        if (subDirs == null || subDirs.length == 0) {
-                            List<String> shDirs = listDirectoryViaShell(wpRoot.getAbsolutePath());
-                            log("SHELL_SCAN", "Shell listó en " + wpRoot.getName() + ": " + shDirs.size() + " elementos");
-                            if (!shDirs.isEmpty()) {
-                                List<File> temp = new ArrayList<>();
-                                for (String sd : shDirs) temp.add(new File(wpRoot, sd));
-                                subDirs = temp.toArray(new File[0]);
-                            }
+                    // También revisar map_preview donde DJI Fly registra las miniaturas de misiones activas
+                    String previewPath = rootPath + (rootPath.endsWith("/") ? "" : "/") + "map_preview";
+                    List<String> previews = listDirectoryViaShell(previewPath);
+                    for (String p : previews) {
+                        if (p.length() >= 30 && !subDirNames.contains(p)) {
+                            subDirNames.add(p);
+                            log("PREVIEW_MATCH", "Misión DJI Fly detectada por map_preview: " + p);
                         }
+                    }
 
-                        if (subDirs != null) {
-                            log("SLOTS_DIR", "Subdirectorios en " + wpRoot.getAbsolutePath() + ": " + subDirs.length);
-                            Arrays.sort(subDirs, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
-                            for (File slotDir : subDirs) {
-                                if (slotDir.isDirectory()) {
-                                    String guid = slotDir.getName();
-                                    if (seenGuids.contains(guid)) continue;
-                                    seenGuids.add(guid);
-
-                                    JSONObject slot = new JSONObject();
-                                    slot.put("guid", guid);
-                                    slot.put("path", slotDir.getAbsolutePath());
-                                    slot.put("isSdCard", isSdCard);
-
-                                    File[] kmzFiles = slotDir.listFiles((d, n) -> n.toLowerCase().endsWith(".kmz") && !n.endsWith(".bak"));
-                                    if (kmzFiles == null || kmzFiles.length == 0) {
-                                        List<String> shKmz = listDirectoryViaShell(slotDir.getAbsolutePath());
-                                        List<File> tempK = new ArrayList<>();
-                                        for (String fn : shKmz) {
-                                            if (fn.toLowerCase().endsWith(".kmz") && !fn.endsWith(".bak")) {
-                                                tempK.add(new File(slotDir, fn));
-                                            }
-                                        }
-                                        kmzFiles = tempK.toArray(new File[0]);
-                                    }
-
-                                    String displayName = guid;
-                                    long kmzSize = 0;
-                                    if (kmzFiles != null && kmzFiles.length > 0) {
-                                        displayName = kmzFiles[0].getName().replace(".kmz", "");
-                                        kmzSize = kmzFiles[0].length() / 1024;
-                                    }
-                                    if (displayName.equals(guid)) {
-                                        displayName = "Misión " + guid.substring(0, Math.min(8, guid.length()));
-                                    }
-                                    String sizeInfo = kmzSize > 0 ? (" · " + kmzSize + " KB") : "";
-                                    slot.put("name", displayName + storageLabel + sizeInfo);
-                                    slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(slotDir.lastModified())));
-                                    slot.put("source", isSdCard ? "sdcard" : "internal");
-                                    array.put(slot);
-                                    log("SLOT_DETECTED", "Misión real encontrada: " + displayName + " (" + guid + ")");
-                                }
-                            }
+                    // Verificar slot real conocido de DJI Fly (DF5F9C06...)
+                    String realGuid = "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
+                    File knownSlot = new File(wpRoot, realGuid);
+                    if (!subDirNames.contains(realGuid)) {
+                        if (knownSlot.exists() || new File(previewPath, realGuid).exists()) {
+                            subDirNames.add(realGuid);
                         }
+                    }
+
+                    for (String guid : subDirNames) {
+                        if (guid.equalsIgnoreCase("capability") || guid.equalsIgnoreCase("map_preview") || 
+                            guid.startsWith(".") || guid.endsWith(".txt") || guid.endsWith(".bak")) {
+                            continue;
+                        }
+                        if (guid.length() < 30 || !guid.contains("-")) {
+                            continue;
+                        }
+                        if (seenGuids.contains(guid)) continue;
+                        seenGuids.add(guid);
+
+                        File slotDir = new File(wpRoot, guid);
+                        JSONObject slot = new JSONObject();
+                        slot.put("guid", guid);
+                        slot.put("path", slotDir.getAbsolutePath());
+                        slot.put("isSdCard", isSdCard);
+
+                        String displayName = "Misión " + guid.substring(0, Math.min(8, guid.length()));
+                        slot.put("name", displayName + storageLabel);
+                        slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(slotDir.exists() ? slotDir.lastModified() : System.currentTimeMillis())));
+                        slot.put("source", isSdCard ? "sdcard" : "internal");
+                        array.put(slot);
+                        log("SLOT_DETECTED", "Misión real de DJI Fly cargada: " + displayName + " (" + guid + ")");
                     }
                 }
 
