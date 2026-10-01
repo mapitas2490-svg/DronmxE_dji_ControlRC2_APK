@@ -367,6 +367,7 @@ function drawThumb(id, coords, isLocal){
   if(!canvas) return;
   var ctx = canvas.getContext('2d'), W = canvas.width = 160, H = canvas.height = 108;
 
+  // Background fallback
   if(isLocal){
     var g = ctx.createLinearGradient(0, 0, W, H);
     g.addColorStop(0, '#381010');
@@ -377,12 +378,12 @@ function drawThumb(id, coords, isLocal){
   }
   ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = isLocal ? 'rgba(120,30,30,0.4)' : 'rgba(30,60,100,0.3)';
-  ctx.lineWidth = 0.5;
-  for(var x=0; x<=W; x+=18){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for(var y=0; y<=H; y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-
   if(!coords || coords.length === 0){
+    ctx.strokeStyle = isLocal ? 'rgba(120,30,30,0.4)' : 'rgba(30,60,100,0.3)';
+    ctx.lineWidth = 0.5;
+    for(var x=0; x<=W; x+=18){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for(var y=0; y<=H; y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
     var lc = isLocal ? '#22c55e' : '#38bdf8';
     ctx.strokeStyle = lc; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.beginPath();
     var cols = 5, rows = 4;
@@ -409,17 +410,54 @@ function drawThumb(id, coords, isLocal){
     if(pt[0]<minX) minX=pt[0]; if(pt[0]>maxX) maxX=pt[0];
     if(pt[1]<minY) minY=pt[1]; if(pt[1]>maxY) maxY=pt[1];
   });
-  var pad = 10, sx = (maxX-minX)||0.001, sy = (maxY-minY)||0.001;
+  var pad = 10, sx = (maxX-minX)||0.0001, sy = (maxY-minY)||0.0001;
   function toXY(pt){ return [pad+((pt[0]-minX)/sx)*(W-pad*2), H-(pad+((pt[1]-minY)/sy)*(H-pad*2))]; }
 
-  ctx.strokeStyle = isLocal ? '#22c55e' : '#38bdf8';
-  ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.beginPath();
-  coords.forEach(function(pt, i){ var p = toXY(pt); if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); });
-  ctx.stroke();
+  function drawWaypointsOverlay() {
+    ctx.shadowColor = isLocal ? 'rgba(34, 197, 94, 0.9)' : 'rgba(56, 189, 248, 0.9)';
+    ctx.shadowBlur = 4;
+    ctx.strokeStyle = isLocal ? '#22c55e' : '#38bdf8';
+    ctx.lineWidth = 2.0; ctx.lineJoin = 'round'; ctx.beginPath();
+    coords.forEach(function(pt, i){ var p = toXY(pt); if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); });
+    ctx.stroke();
 
-  var rad = coords.length > 50 ? 1.0 : (coords.length > 20 ? 1.4 : 2.5);
-  ctx.fillStyle = '#ffffff';
-  coords.forEach(function(pt){ var p = toXY(pt); ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, Math.PI*2); ctx.fill(); });
+    ctx.shadowBlur = 0;
+    var rad = coords.length > 50 ? 1.2 : (coords.length > 20 ? 1.8 : 3.0);
+    ctx.fillStyle = '#ffffff';
+    coords.forEach(function(pt){ var p = toXY(pt); ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, Math.PI*2); ctx.fill(); });
+  }
+
+  // ESRI ArcGIS Satellite World Imagery Map Export
+  try {
+    var r = 6378137.0;
+    var xmin = minX * Math.PI / 180 * r;
+    var xmax = maxX * Math.PI / 180 * r;
+    var ymin = Math.log(Math.tan((90 + minY) * Math.PI / 360)) * r;
+    var ymax = Math.log(Math.tan((90 + maxY) * Math.PI / 360)) * r;
+
+    var dx = (xmax - xmin) || 500, dy = (ymax - ymin) || 500;
+    xmin -= dx * 0.25; xmax += dx * 0.25;
+    ymin -= dy * 0.25; ymax += dy * 0.25;
+
+    var esriUrl = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox='
+        + Math.round(xmin) + ',' + Math.round(ymin) + ',' + Math.round(xmax) + ',' + Math.round(ymax)
+        + '&bboxSR=102100&size=160,108&imageSR=102100&format=jpg&f=image';
+
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      ctx.drawImage(img, 0, 0, W, H);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(0, 0, W, H);
+      drawWaypointsOverlay();
+    };
+    img.onerror = function() {
+      drawWaypointsOverlay();
+    };
+    img.src = esriUrl;
+  } catch(e) {
+    drawWaypointsOverlay();
+  }
 }
 
 async function parseKmzWaypoints(b64){
