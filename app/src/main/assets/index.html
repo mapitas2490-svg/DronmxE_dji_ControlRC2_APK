@@ -121,8 +121,8 @@
 </div>
 
 <div class="tbar">
-  <button class="titem" id="tab-dev" onclick="switchTab('dev')">🎮 RC 2 (DJI Fly)</button>
-  <button class="titem active" id="tab-local" onclick="switchTab('local')">📱 Misiones Locales</button>
+  <button class="titem active" id="tab-dev" onclick="switchTab('dev')">🎮 RC 2 (DJI Fly)</button>
+  <button class="titem" id="tab-local" onclick="switchTab('local')">📱 Misiones Locales</button>
 </div>
 
 <div class="split">
@@ -221,6 +221,11 @@ function onDeviceStatusChanged(connected, description){
   dot.className = 'sdot ' + (connected ? 'ok' : 'err');
   txt.textContent = description || (connected ? 'DJI RC 2 Conectado y Listo' : 'Sin cable OTG conectado');
   updateSyncBtn();
+  if(connected) {
+    refreshDeviceSlots();
+  } else {
+    renderDeviceSlots();
+  }
 }
 function onLogMessage(msg){ appendLog(msg); }
 
@@ -240,8 +245,15 @@ function switchTab(tab){
 
 function renderDeviceSlots(){
   const c = document.getElementById('list-dev'), slots = S.deviceSlots;
+  const td = document.getElementById('tab-dev');
+  if(td) td.textContent = '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
+
   if(!slots || slots.length === 0){
-    c.innerHTML = '<div class="empty">No se detectaron ranuras en RC 2.<br>Conecta el cable USB-OTG al RC 2.</div>';
+    if(!S.connected) {
+      c.innerHTML = '<div class="empty">🔌 Sin conexión USB-OTG.<br><small style="color:var(--muted)">Conecta el cable USB OTG al teléfono y desbloquea la pantalla del RC 2.</small></div>';
+    } else {
+      c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Presiona el botón "➕ CREAR NUEVA MISIÓN EN RC 2" para transferir una.</small></div>';
+    }
     document.getElementById('dst-slot').textContent = 'Sin ranura seleccionada';
     return;
   }
@@ -300,10 +312,10 @@ function selectDeviceSlot(guid){
 function renderLocalMissions(){
   const c = document.getElementById('list-local'), missions = S.localMissions;
   const tl = document.getElementById('tab-local');
-  if(tl) tl.textContent = '📱 Misiones Locales (' + missions.length + ')';
+  if(tl) tl.textContent = '📱 Misiones Locales (' + (missions ? missions.length : 0) + ')';
 
   if(!missions || missions.length === 0){
-    c.innerHTML = '<div class="empty">No se encontraron archivos .kmz<br>en /sdcard/Download.</div>';
+    c.innerHTML = '<div class="empty">📂 No se encontraron archivos .kmz<br><small style="color:var(--muted)">Guarda archivos .kmz en /sdcard/Download o usa "📂 Abrir".</small></div>';
     document.getElementById('src-name').textContent = 'Ninguna';
     return;
   }
@@ -452,34 +464,55 @@ function refreshAll(){
 
 function refreshDeviceSlots(){
   document.getElementById('list-dev').innerHTML = '<div class="empty"><span class="spin">⏳</span> Escaneando RC 2...</div>';
-  if(window.AndroidBridge && window.AndroidBridge.getDeviceSlotsJson){
-    try {
-      S.deviceSlots = JSON.parse(window.AndroidBridge.getDeviceSlotsJson());
-    } catch(e) {
-      S.deviceSlots = [];
+  if(window.AndroidBridge){
+    if(window.AndroidBridge.fetchDeviceSlotsAsync){
+      window.AndroidBridge.fetchDeviceSlotsAsync();
+    } else if(window.AndroidBridge.getDeviceSlotsJson){
+      try {
+        S.deviceSlots = JSON.parse(window.AndroidBridge.getDeviceSlotsJson());
+      } catch(e) { S.deviceSlots = []; }
+      renderDeviceSlots();
     }
-    renderDeviceSlots();
   }
 }
 
-async function refreshLocalMissions(){
+function onDeviceSlotsLoaded(rawJson){
+  try {
+    S.deviceSlots = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+  } catch(e) {
+    S.deviceSlots = [];
+  }
+  renderDeviceSlots();
+}
+
+function refreshLocalMissions(){
   document.getElementById('list-local').innerHTML = '<div class="empty"><span class="spin">⏳</span> Escaneando descargas...</div>';
-  if(window.AndroidBridge && window.AndroidBridge.getLocalMissionsJson){
-    try {
-      var list = JSON.parse(window.AndroidBridge.getLocalMissionsJson());
-      S.localMissions = list;
-      for(var m of S.localMissions){
-        if(m.base64 && (!m.coords || m.coords.length === 0)){
-          var p = await parseKmzWaypoints(m.base64);
-          m.wpCount = p.wpCount;
-          m.coords = p.coords;
-        }
-      }
-      renderLocalMissions();
-    } catch(e) {
-      appendLog('Error leyendo locales: ' + e.message);
-      renderLocalMissions();
+  if(window.AndroidBridge){
+    if(window.AndroidBridge.fetchLocalMissionsAsync){
+      window.AndroidBridge.fetchLocalMissionsAsync();
+    } else if(window.AndroidBridge.getLocalMissionsJson){
+      try {
+        onLocalMissionsLoaded(window.AndroidBridge.getLocalMissionsJson());
+      } catch(e) {}
     }
+  }
+}
+
+async function onLocalMissionsLoaded(rawJson){
+  try {
+    var list = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    S.localMissions = list || [];
+    for(var m of S.localMissions){
+      if(m.base64 && (!m.coords || m.coords.length === 0)){
+        var p = await parseKmzWaypoints(m.base64);
+        m.wpCount = p.wpCount;
+        m.coords = p.coords;
+      }
+    }
+    renderLocalMissions();
+  } catch(e) {
+    appendLog('Error leyendo locales: ' + e.message);
+    renderLocalMissions();
   }
 }
 
@@ -539,6 +572,7 @@ function deleteDeviceSlotItem(guid, displayName, e){
 }
 
 window.onload = function(){
+  switchTab('dev');
   refreshAll();
 };
 </script>

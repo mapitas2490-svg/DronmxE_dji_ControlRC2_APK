@@ -213,6 +213,14 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         }
 
         @JavascriptInterface
+        public void fetchDeviceSlotsAsync() {
+            new Thread(() -> {
+                String json = getDeviceSlotsJson();
+                notifyJs("onDeviceSlotsLoaded(" + json + ");");
+            }).start();
+        }
+
+        @JavascriptInterface
         public String getLocalMissionsJson() {
             try {
                 availableKmzFiles.clear();
@@ -348,6 +356,13 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             }
         }
 
+        @JavascriptInterface
+        public void fetchLocalMissionsAsync() {
+            new Thread(() -> {
+                String json = getLocalMissionsJson();
+                notifyJs("onLocalMissionsLoaded(" + json + ");");
+            }).start();
+        }
 
         @JavascriptInterface
         public boolean overwriteSlotFromLocal(String slotGuid, String localFileName) {
