@@ -441,13 +441,23 @@ public class MtpHelper {
         MtpDevice device; synchronized (mtpLock) { device = mtpDevice; }
         if (device == null || !localFile.exists()) return false;
         try {
+            // Asegurar formato WPML estándar de DJI Fly (wpmz/template.kml + wpmz/waylines.wpml)
+            File fileToSend = WpmlKmzBuilder.ensureDjiWpmlKmz(localFile, context.getCacheDir());
+
             int[] storageIds = device.getStorageIds();
             if (storageIds == null || storageIds.length == 0) return false;
             int storageId = storageIds[0]; int waypointHandle = -1;
             for (int sid : storageIds) {
-                for (String[] path : WAYPOINT_PATH_CANDIDATES) {
-                    int h = findHandleForPath(device, sid, path);
-                    if (h != -1) { waypointHandle = h; storageId = sid; break; }
+                if (customWaypointPath != null && !customWaypointPath.trim().isEmpty()) {
+                    String cleanPath = customWaypointPath.trim().replaceAll("^/+|/+$", "");
+                    String[] parts = cleanPath.split("[/\\\\]+");
+                    waypointHandle = findHandleForPath(device, sid, parts);
+                }
+                if (waypointHandle == -1) {
+                    for (String[] path : WAYPOINT_PATH_CANDIDATES) {
+                        int h = findHandleForPath(device, sid, path);
+                        if (h != -1) { waypointHandle = h; storageId = sid; break; }
+                    }
                 }
                 if (waypointHandle != -1) break;
             }
@@ -470,11 +480,11 @@ public class MtpHelper {
             int[] files = device.getObjectHandles(storageId, 0, folderHandle);
             if (files != null) { for (int fh : files) device.deleteObject(fh); }
             MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
-            fb.setName(slotGuid + ".kmz"); fb.setParent(folderHandle); fb.setStorageId(storageId); fb.setCompressedSize(localFile.length()); fb.setFormat(MtpConstants.FORMAT_UNDEFINED);
+            fb.setName(slotGuid + ".kmz"); fb.setParent(folderHandle); fb.setStorageId(storageId); fb.setCompressedSize(fileToSend.length()); fb.setFormat(MtpConstants.FORMAT_UNDEFINED);
             MtpObjectInfo sent = device.sendObjectInfo(fb.build());
             if (sent == null) return false;
-            ParcelFileDescriptor pfd = ParcelFileDescriptor.open(localFile, ParcelFileDescriptor.MODE_READ_ONLY);
-            boolean ok = device.sendObject(sent.getObjectHandle(), (int) localFile.length(), pfd);
+            ParcelFileDescriptor pfd = ParcelFileDescriptor.open(fileToSend, ParcelFileDescriptor.MODE_READ_ONLY);
+            boolean ok = device.sendObject(sent.getObjectHandle(), (int) fileToSend.length(), pfd);
             pfd.close();
             return ok;
         } catch (Exception e) { return false; }
