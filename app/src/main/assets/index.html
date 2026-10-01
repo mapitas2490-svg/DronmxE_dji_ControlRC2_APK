@@ -81,6 +81,9 @@
     .btn-del{width:36px;height:36px;border-radius:6px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#f87171;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
     .btn-del:hover{background:rgba(239,68,68,0.35);color:#fff;border-color:#ef4444}
     .btn-del:active{transform:scale(.92)}
+    .btn-earth{width:36px;height:36px;border-radius:6px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+    .btn-earth:hover{background:rgba(56,189,248,0.35);color:#fff;border-color:#38bdf8}
+    .btn-earth:active{transform:scale(.92)}
 
     /* FULL NAME AT BOTTOM OF CARD */
     .mrow-name{font-size:13px;font-weight:700;color:#ffffff;word-break:break-all;line-height:1.3;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.08);margin-top:2px}
@@ -311,6 +314,7 @@ function renderDeviceSlots(){
           +'<div class="msub guid-txt">GUID: '+esc(shortGuid(slot.guid))+'</div>'
         +'</div>'
         +'<div class="mact">'
+          +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openDeviceSlotInGoogleEarth(\''+esc(slot.guid)+'\', event)">🌍</button>'
           +'<button class="btn-del" title="Eliminar del RC 2" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
         +'</div>'
       +'</div>'
@@ -369,6 +373,7 @@ function renderLocalMissions(){
           +'<div class="msub">'+esc(tag)+' · '+relTime(m.dateModified)+' · '+wp+'</div>'
         +'</div>'
         +'<div class="mact">'
+          +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openMissionInGoogleEarth(\''+esc(m.name)+'\', event)">🌍</button>'
           +'<button class="btn-del" title="Eliminar del celular" onclick="deleteLocalMissionItem(\''+esc(m.name)+'\', event)">🗑️</button>'
         +'</div>'
       +'</div>'
@@ -624,6 +629,20 @@ function createSelectedLocalAsNewDeviceSlot(){
 function downloadSelectedDeviceSlot(){
   if(!S.selDeviceGuid){ alert('Selecciona una ranura del control remoto.'); return; }
   if(window.AndroidBridge && window.AndroidBridge.downloadDeviceSlot) window.AndroidBridge.downloadDeviceSlot(S.selDeviceGuid);
+}
+
+function openMissionInGoogleEarth(fileName, e){
+  if(e) e.stopPropagation();
+  if(window.AndroidBridge && window.AndroidBridge.openInGoogleEarth){
+    window.AndroidBridge.openInGoogleEarth(fileName);
+  }
+}
+
+function openDeviceSlotInGoogleEarth(guid, e){
+  if(e) e.stopPropagation();
+  if(window.AndroidBridge && window.AndroidBridge.openInGoogleEarth){
+    window.AndroidBridge.openInGoogleEarth(guid);
+  }
 }
 
 function deleteLocalMissionItem(fileName, e){

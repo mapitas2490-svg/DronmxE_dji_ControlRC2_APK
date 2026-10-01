@@ -498,12 +498,103 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                             fos.write(bytes);
                         }
                         showToast("✅ Misión descargada a /Download/" + slotGuid + ".kmz");
+                        // Asegurar compatibilidad universal (doc.kml para Google Earth y wpmz para DJI Fly)
+                        try {
+                            WpmlKmzBuilder.ensureDjiWpmlKmz(out, downloads);
+                        } catch (Exception ignored) {}
                         notifyJs("refreshLocalMissions();");
                     } catch (Exception e) {
                         showToast("Error guardando misión: " + e.getMessage());
                     }
                 } else {
                     showToast("Fallo al descargar KMZ desde el control.");
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void openInGoogleEarth(String fileNameOrGuid) {
+            new Thread(() -> {
+                File fileToOpen = null;
+                synchronized (availableKmzFiles) {
+                    for (File f : availableKmzFiles) {
+                        if (f.getName().equalsIgnoreCase(fileNameOrGuid) || f.getName().equalsIgnoreCase(fileNameOrGuid + ".kmz")) {
+                            fileToOpen = f;
+                            break;
+                        }
+                    }
+                }
+                if (fileToOpen == null) {
+                    File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File candidate = new File(downloads, fileNameOrGuid.endsWith(".kmz") ? fileNameOrGuid : (fileNameOrGuid + ".kmz"));
+                    if (candidate.exists()) fileToOpen = candidate;
+                }
+
+                if (fileToOpen == null || !fileToOpen.exists()) {
+                    showToast("No se encontró el archivo: " + fileNameOrGuid);
+                    return;
+                }
+
+                try {
+                    // Asegurar que contenga doc.kml para Google Earth y wpmz/ para DJI Fly
+                    File universalFile = WpmlKmzBuilder.ensureDjiWpmlKmz(fileToOpen, getCacheDir());
+
+                    Uri contentUri = androidx.core.content.FileProvider.getUriForFile(
+                            MainActivity.this,
+                            getPackageName() + ".fileprovider",
+                            universalFile
+                    );
+
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setDataAndType(contentUri, "application/vnd.google-earth.kmz");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                    // Intentar abrir con Google Earth si está instalado
+                    intent.setPackage("com.google.earth");
+                    try {
+                        startActivity(intent);
+                        showToast("Abriendo en Google Earth...");
+                    } catch (Exception e1) {
+                        // Si falla directo al package, abrir selector general de apps
+                        intent.setPackage(null);
+                        Intent chooser = Intent.createChooser(intent, "Abrir misión KMZ con");
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(chooser);
+                    }
+                } catch (Exception e) {
+                    showToast("Error abriendo en Google Earth: " + e.getMessage());
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void exportUniversalKmz(String fileName) {
+            new Thread(() -> {
+                File targetFile = null;
+                synchronized (availableKmzFiles) {
+                    for (File f : availableKmzFiles) {
+                        if (f.getName().equalsIgnoreCase(fileName)) {
+                            targetFile = f; break;
+                        }
+                    }
+                }
+                if (targetFile == null) {
+                    File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File candidate = new File(downloads, fileName);
+                    if (candidate.exists()) targetFile = candidate;
+                }
+                if (targetFile == null || !targetFile.exists()) {
+                    showToast("Archivo no encontrado: " + fileName);
+                    return;
+                }
+                try {
+                    File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File result = WpmlKmzBuilder.ensureDjiWpmlKmz(targetFile, downloads);
+                    showToast("✅ KMZ Universal exportado: " + result.getName());
+                    notifyJs("refreshLocalMissions();");
+                } catch (Exception e) {
+                    showToast("Error exportando: " + e.getMessage());
                 }
             }).start();
         }

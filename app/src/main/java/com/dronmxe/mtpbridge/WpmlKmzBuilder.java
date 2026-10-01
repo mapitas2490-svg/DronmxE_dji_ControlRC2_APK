@@ -48,20 +48,31 @@ public class WpmlKmzBuilder {
         try { android.util.Log.e(tag, msg, e); } catch (Throwable t) { System.err.println("[" + tag + "] " + msg + " " + e); }
     }
 
+    private static String escapeXml(String str) {
+        if (str == null) return "";
+        return str.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;")
+                  .replace("\"", "&quot;")
+                  .replace("'", "&apos;");
+    }
+
     /**
-     * Procesa un archivo KMZ/KML local y devuelve un archivo KMZ formateado para DJI Fly.
+     * Procesa un archivo KMZ/KML local y devuelve un archivo KMZ universal compatible con:
+     * 1. Google Earth (doc.kml en la raíz)
+     * 2. DJI Fly RC 2 / RC Pro (wpmz/template.kml y wpmz/waylines.wpml)
      */
     public static File ensureDjiWpmlKmz(File inputFile, File outputDir) {
         if (inputFile == null || !inputFile.exists()) return inputFile;
 
         try {
-            // 1. Verificar si ya es un paquete WPML de DJI (contiene wpmz/template.kml)
-            if (isAlreadyDjiWpml(inputFile)) {
-                logD(TAG, "El archivo ya es un paquete DJI WPML válido: " + inputFile.getName());
+            // 1. Verificar si ya es un paquete universal (contiene wpmz/template.kml Y doc.kml)
+            if (isAlreadyUniversal(inputFile)) {
+                logD(TAG, "El archivo ya es un paquete universal válido (DJI Fly + Google Earth): " + inputFile.getName());
                 return inputFile;
             }
 
-            logD(TAG, "Misión no contiene formato WPML DJI. Convirtiendo a KMZ estándar para DJI Fly...");
+            logD(TAG, "Misión no contiene formato universal. Generando KMZ compatible con Google Earth y DJI Fly...");
 
             // 2. Extraer waypoints del KML/KMZ de origen
             List<Waypoint> waypoints = extractWaypoints(inputFile);
@@ -73,21 +84,28 @@ public class WpmlKmzBuilder {
             String missionName = inputFile.getName().replace(".kmz", "").replace(".kml", "");
             File targetKmz = new File(outputDir, missionName + "_dji_fly.kmz");
 
-            // 3. Generar el XML template.kml y waylines.wpml de DJI
+            // 3. Generar XML para Google Earth (doc.kml) y para DJI Fly (template.kml + waylines.wpml)
+            String docKmlXml = generateDocKml(missionName, waypoints);
             String templateXml = generateTemplateKml(missionName, waypoints);
             String waylinesXml = generateWaylinesWpml(missionName, waypoints);
 
-            // 4. Empaquetar ambos en wpmz/template.kml y wpmz/waylines.wpml dentro del .kmz
+            // 4. Empaquetar todo en el archivo .kmz
             try (FileOutputStream fos = new FileOutputStream(targetKmz);
                  ZipOutputStream zos = new ZipOutputStream(fos)) {
 
-                // Entry 1: wpmz/template.kml
+                // Entry 1: doc.kml (ESTÁNDAR OGC PARA GOOGLE EARTH DESKTOP / WEB / MOBILE)
+                ZipEntry entryDocKml = new ZipEntry("doc.kml");
+                zos.putNextEntry(entryDocKml);
+                zos.write(docKmlXml.getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+
+                // Entry 2: wpmz/template.kml (ESTÁNDAR DJI FLY WPML 1.0.3 PARA RC 2)
                 ZipEntry entryTemplate = new ZipEntry("wpmz/template.kml");
                 zos.putNextEntry(entryTemplate);
                 zos.write(templateXml.getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
 
-                // Entry 2: wpmz/waylines.wpml
+                // Entry 3: wpmz/waylines.wpml (ESTÁNDAR EJECUCIÓN WAYLINES DJI FLY)
                 ZipEntry entryWaylines = new ZipEntry("wpmz/waylines.wpml");
                 zos.putNextEntry(entryWaylines);
                 zos.write(waylinesXml.getBytes(StandardCharsets.UTF_8));
@@ -96,27 +114,32 @@ public class WpmlKmzBuilder {
                 zos.finish();
             }
 
-            logD(TAG, "✅ Paquete DJI WPML KMZ generado con éxito: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
+            logD(TAG, "✅ Paquete Universal KMZ generado: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
             return targetKmz;
 
         } catch (Exception e) {
-            logE(TAG, "Error convirtiendo a paquete DJI WPML KMZ: " + e.getMessage(), e);
+            logE(TAG, "Error convirtiendo a paquete Universal KMZ: " + e.getMessage(), e);
             return inputFile;
         }
     }
 
-    private static boolean isAlreadyDjiWpml(File file) {
+    private static boolean isAlreadyUniversal(File file) {
         if (!file.getName().toLowerCase().endsWith(".kmz")) return false;
+        boolean hasTemplate = false;
+        boolean hasDocKml = false;
         try (ZipInputStream zis = new ZipInputStream(new FileInputStream(file))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 String name = entry.getName().toLowerCase();
                 if (name.contains("wpmz/template.kml") || name.contains("wpmz/waylines.wpml")) {
-                    return true;
+                    hasTemplate = true;
+                }
+                if (name.equals("doc.kml") || name.endsWith("/doc.kml") || (name.endsWith(".kml") && !name.startsWith("wpmz/"))) {
+                    hasDocKml = true;
                 }
             }
         } catch (Exception ignored) {}
-        return false;
+        return hasTemplate && hasDocKml;
     }
 
     private static List<Waypoint> extractWaypoints(File file) throws Exception {
@@ -256,4 +279,68 @@ public class WpmlKmzBuilder {
         sb.append("</kml>\n");
         return sb.toString();
     }
+
+    private static String generateDocKml(String missionName, List<Waypoint> waypoints) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n");
+        sb.append("  <Document>\n");
+        sb.append("    <name>").append(escapeXml(missionName)).append("</name>\n");
+        sb.append("    <open>1</open>\n");
+        sb.append("    <description>Misión dronmxE compatible con Google Earth y DJI Fly RC 2</description>\n");
+        sb.append("    <Style id=\"flightPathLine\">\n");
+        sb.append("      <LineStyle>\n");
+        sb.append("        <color>ff00ffff</color>\n"); // Amarillo en formato KML AABBGGRR
+        sb.append("        <width>4</width>\n");
+        sb.append("      </LineStyle>\n");
+        sb.append("      <PolyStyle>\n");
+        sb.append("        <color>4400ffff</color>\n");
+        sb.append("      </PolyStyle>\n");
+        sb.append("    </Style>\n");
+        sb.append("    <Style id=\"wpIcon\">\n");
+        sb.append("      <IconStyle>\n");
+        sb.append("        <scale>1.1</scale>\n");
+        sb.append("        <Icon>\n");
+        sb.append("          <href>https://maps.google.com/mapfiles/kml/paddle/red-circle.png</href>\n");
+        sb.append("        </Icon>\n");
+        sb.append("      </IconStyle>\n");
+        sb.append("    </Style>\n");
+
+        // Línea de la trayectoria de vuelo (Flight Path)
+        sb.append("    <Placemark>\n");
+        sb.append("      <name>Trayectoria de Vuelo</name>\n");
+        sb.append("      <styleUrl>#flightPathLine</styleUrl>\n");
+        sb.append("      <LineString>\n");
+        sb.append("        <extrude>1</extrude>\n");
+        sb.append("        <tessellate>1</tessellate>\n");
+        sb.append("        <altitudeMode>relativeToGround</altitudeMode>\n");
+        sb.append("        <coordinates>\n");
+        for (Waypoint wp : waypoints) {
+            sb.append("          ").append(wp.lon).append(",").append(wp.lat).append(",").append(wp.alt).append("\n");
+        }
+        sb.append("        </coordinates>\n");
+        sb.append("      </LineString>\n");
+        sb.append("    </Placemark>\n");
+
+        // Carpeta con Waypoints individuales
+        sb.append("    <Folder>\n");
+        sb.append("      <name>Waypoints de Misión (").append(waypoints.size()).append(")</name>\n");
+        for (int i = 0; i < waypoints.size(); i++) {
+            Waypoint wp = waypoints.get(i);
+            sb.append("      <Placemark>\n");
+            sb.append("        <name>WP ").append(i + 1).append("</name>\n");
+            sb.append("        <description>Altitud: ").append(wp.alt).append(" m | Velocidad: ").append(wp.speed).append(" m/s</description>\n");
+            sb.append("        <styleUrl>#wpIcon</styleUrl>\n");
+            sb.append("        <Point>\n");
+            sb.append("          <altitudeMode>relativeToGround</altitudeMode>\n");
+            sb.append("          <coordinates>").append(wp.lon).append(",").append(wp.lat).append(",").append(wp.alt).append("</coordinates>\n");
+            sb.append("        </Point>\n");
+            sb.append("      </Placemark>\n");
+        }
+        sb.append("    </Folder>\n");
+        sb.append("  </Document>\n");
+        sb.append("</kml>\n");
+        return sb.toString();
+    }
 }
+
