@@ -1184,11 +1184,6 @@
         <div class="mode-tab" id="tab-mode-circle" onclick="setMissionMode('Circle')">Círculo</div>
       </div>
 
-      <!-- Botón Superior Destacado: Inyectar en DJI Fly -->
-      <button class="btn-top-inject-dji" onclick="openSendToDjiFlyModal()">
-        🚀 Inyectar Misión en DJI Fly
-      </button>
-
       <!-- Missions Library List -->
       <div class="drawer-content">
         <div class="section-title">
@@ -1216,11 +1211,6 @@
           <span style="font-size: 0.78rem; color: var(--text-muted); cursor: pointer;" onclick="switchToView('map')">Volver al mapa</span>
         </div>
       </div>
-
-      <!-- Botón Superior Destacado: Inyectar en DJI Fly -->
-      <button class="btn-top-inject-dji" onclick="openSendToDjiFlyModal()">
-        🚀 Inyectar Misión en DJI Fly
-      </button>
 
       <div class="drawer-content">
         <!-- Top Stats Chip Card -->
@@ -1417,10 +1407,6 @@
             📤 Compartir
           </button>
         </div>
-
-        <button class="btn-outline-pill" style="margin-top: 8px; width: 100%; justify-content: center; background: var(--bg-subtle); font-weight: 700;" onclick="openSendToDjiFlyModal()">
-          🚀 Enviar a DJI Fly...
-        </button>
       </div>
 
       <!-- Config Footer: Back, Save, Next -->
@@ -1568,6 +1554,23 @@
             Acceso directo a carpeta — sin errores de .offlineflightmission_history.txt
           </div>
         </div>
+      </div>
+
+      <!-- Diagnostic Log Card -->
+      <div class="diagnostic-card" style="margin-top: 14px; background: #0f172a; border-radius: 10px; padding: 12px; color: #f8fafc; border: 1px solid #334155;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">📊</span>
+            <strong style="font-size: 0.86rem; color: #38bdf8;">Diagnóstico de Conexión USB y Misiones</strong>
+            <span id="usb-status-badge" style="font-size: 0.72rem; padding: 3px 10px; border-radius: 9999px; background: #334155; color: #94a3b8; font-weight: 700;">Verificando...</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-refresh" style="background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; padding: 5px 12px; font-size: 0.75rem; border-radius: 6px; cursor: pointer; font-weight: 700;" onclick="refreshDiagnosticLog()">↻ Actualizar</button>
+            <button type="button" style="background: #2563eb; color: #fff; border: none; padding: 5px 14px; font-size: 0.75rem; border-radius: 6px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.3);" onclick="copyDiagnosticLog()">📋 Copiar Log</button>
+            <button type="button" style="background: #334155; color: #94a3b8; border: none; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px; cursor: pointer;" onclick="clearDiagnosticLog()">🧹 Limpiar</button>
+          </div>
+        </div>
+        <pre id="diagnostic-log-viewer" style="margin: 0; max-height: 180px; overflow-y: auto; background: #020617; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.72rem; color: #4ade80; white-space: pre-wrap; word-break: break-all;">Iniciando sistema de diagnóstico...</pre>
       </div>
     </div>
   </div>
@@ -2552,6 +2555,7 @@
         document.getElementById('export-screen').classList.add('active');
         refreshExportMissionsList();
         refreshDjiSlots();
+        refreshDiagnosticLog();
       }
     }
 
@@ -2905,22 +2909,9 @@
         }
       }
 
-      // Si no hay slots de AndroidBridge (ej. navegador o puente en standby), usar los 11 slots del DJI RC 2
-      if (!slots || slots.length === 0) {
-        slots = [
-          { guid: "DF5F9C06-1155-4737-9376-B36B0DD6E9F8", name: "Misión DF5F9C06", lastModified: "2026-09-30 11:19", source: "sdcard" },
-          { guid: "087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", name: "Misión 087A9AFE", lastModified: "2026-08-22 18:44", source: "sdcard" },
-          { guid: "A73A8028-48C1-4FA9-9670-D30FD639AD1B", name: "Misión A73A8028", lastModified: "2026-08-22 18:42", source: "sdcard" },
-          { guid: "8F99B63E-F707-4453-B57F-C4E6FAE18B1F", name: "Misión 8F99B63E", lastModified: "2026-08-22 18:28", source: "sdcard" },
-          { guid: "F679F105-5936-4C75-B4D2-34AB49D51BCE", name: "Misión F679F105", lastModified: "2026-08-22 18:21", source: "sdcard" },
-          { guid: "1DBB6B29-0B1A-460C-A296-4BF5F146BA28", name: "Misión 1DBB6B29", lastModified: "2026-08-22 18:16", source: "sdcard" },
-          { guid: "EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", name: "Misión EA5FA18E", lastModified: "2026-08-22 17:57", source: "sdcard" },
-          { guid: "09E4DA39-1594-44A3-A1E9-890E731ED678", name: "Misión 09E4DA39", lastModified: "2026-08-22 17:51", source: "sdcard" },
-          { guid: "E1E5C00D-1B0E-4175-ACB3-F152BA208768", name: "Misión E1E5C00D", lastModified: "2026-08-22 17:40", source: "sdcard" },
-          { guid: "5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", name: "Misión 5A8E7050", lastModified: "2026-08-22 17:34", source: "sdcard" },
-          { guid: "D378CA50-5D87-41B1-B126-045C20BA5816", name: "Misión D378CA50", lastModified: "2026-08-22 17:29", source: "sdcard" }
-        ];
-      }
+      // Limpieza estricta: NO mostrar slots falsos ni por defecto si la lectura no encuentra misiones reales
+      if (!slots) slots = [];
+      refreshDiagnosticLog();
 
       if (slots.length > 0 && !AppState.activeSlotGuid) {
         AppState.activeSlotGuid = slots[0].guid;
@@ -2933,10 +2924,16 @@
         container.innerHTML = '';
         if (slots.length === 0) {
           container.innerHTML = `
-            <div style="padding: 16px; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; color: #991b1b; font-size: 0.85rem; text-align: center;">
-              <strong>Sin misiones detectadas en el almacenamiento</strong><br/>
-              Asegúrate de que la Tarjeta SD esté insertada en el DJI RC 2 o que existan misiones creadas en DJI Fly.<br/>
-              <button class="btn-refresh" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8rem; background: #fff; border: 1px solid #dc2626; border-radius: 6px; cursor: pointer;" onclick="refreshDjiSlots(true)">🔄 Forzar Lectura en Control RC 2</button>
+            <div style="padding: 16px; background: #fff1f2; border: 1.5px dashed #f43f5e; border-radius: 10px; color: #9f1239; font-size: 0.83rem; text-align: center;">
+              <div style="font-size: 1.6rem; margin-bottom: 4px;">🔌📱</div>
+              <strong style="font-size: 0.9rem; color: #be123c; display: block; margin-bottom: 4px;">0 Misiones leídas en DJI Fly</strong>
+              <p style="margin: 0 0 10px 0; font-size: 0.77rem; color: #881337; line-height: 1.4;">
+                Conecta el cable <strong>USB-C entre el control DJI RC 2 y el celular</strong> en modo Transferencia de archivos (MTP) para sincronizar las misiones de vuelo.
+              </p>
+              <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+                <button type="button" class="btn-refresh" style="padding: 6px 14px; font-size: 0.78rem; background: #be123c; color: #fff; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;" onclick="refreshDjiSlots(true)">🔄 Forzar Lectura</button>
+                <button type="button" style="padding: 6px 12px; font-size: 0.78rem; background: #fff; color: #be123c; border: 1px solid #f43f5e; border-radius: 6px; font-weight: 700; cursor: pointer;" onclick="copyDiagnosticLog()">📋 Copiar Log</button>
+              </div>
             </div>
           `;
           return;
@@ -3271,8 +3268,97 @@
       }
     }
 
+    // =========================================================
+    // DIAGNÓSTICO DEL SISTEMA Y CONEXIÓN USB
+    // =========================================================
+    function refreshDiagnosticLog() {
+      if (window.AndroidBridge && window.AndroidBridge.getDiagnosticLog) {
+        const logText = window.AndroidBridge.getDiagnosticLog();
+        const viewer = document.getElementById('diagnostic-log-viewer');
+        if (viewer) {
+          viewer.textContent = logText || "(Sin registros por el momento)";
+          viewer.scrollTop = viewer.scrollHeight;
+        }
+      }
+      if (window.AndroidBridge && window.AndroidBridge.getUsbConnectionStatus) {
+        try {
+          const status = JSON.parse(window.AndroidBridge.getUsbConnectionStatus());
+          const badge = document.getElementById('usb-status-badge');
+          if (badge) {
+            if (status.isConnected) {
+              badge.style.background = '#065f46';
+              badge.style.color = '#34d399';
+              badge.textContent = '🔌 USB Conectado (' + (status.usbPlugged ? 'Periférico' : (status.hasDjiDevice ? 'DJI RC 2 Detectado' : 'Host Activo')) + ')';
+            } else {
+              badge.style.background = '#7f1d1d';
+              badge.style.color = '#f87171';
+              badge.textContent = '⚠️ USB Desconectado';
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    function copyDiagnosticLog() {
+      let logText = "";
+      if (window.AndroidBridge && window.AndroidBridge.getDiagnosticLog) {
+        logText = window.AndroidBridge.getDiagnosticLog();
+      } else {
+        const viewer = document.getElementById('diagnostic-log-viewer');
+        if (viewer) logText = viewer.textContent;
+      }
+      
+      if (!logText || logText.trim() === '') {
+        logText = "Log vacío en este momento.";
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(logText).then(() => {
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+          } else {
+            alert("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+          }
+        }).catch(() => fallbackCopy(logText));
+      } else {
+        fallbackCopy(logText);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+        } else {
+          alert("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+        }
+      } catch (err) {
+        prompt("Copia el texto del log manualmente:", text);
+      }
+      document.body.removeChild(ta);
+    }
+
+    function clearDiagnosticLog() {
+      if (window.AndroidBridge && window.AndroidBridge.clearDiagnosticLog) {
+        window.AndroidBridge.clearDiagnosticLog();
+        refreshDiagnosticLog();
+      }
+    }
+
+    function onUsbHardwareChanged(connected) {
+      refreshDiagnosticLog();
+      refreshDjiSlots(true);
+    }
+    window.onUsbHardwareChanged = onUsbHardwareChanged;
+
     window.addEventListener('DOMContentLoaded', () => {
       initMap();
+      setTimeout(refreshDiagnosticLog, 1000);
     });
   </script>
 </body>

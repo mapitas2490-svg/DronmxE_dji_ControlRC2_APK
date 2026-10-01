@@ -18,6 +18,7 @@ import android.mtp.MtpConstants;
 import android.mtp.MtpDevice;
 import android.mtp.MtpObjectInfo;
 import android.net.Uri;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -67,18 +68,60 @@ public class MainActivity extends AppCompatActivity {
     private static final int NATIVE_PICKER_REQUEST_CODE = 2002;
     public static final String ACTION_USB_PERMISSION = "com.openflight.mission.USB_PERMISSION";
 
+    public static final StringBuilder DIAGNOSTIC_LOG = new StringBuilder();
+
+    public static void log(String tag, String msg) {
+        String timestamp = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(new Date());
+        String entry = "[" + timestamp + "][" + tag + "] " + msg;
+        android.util.Log.i("dronmxE", entry);
+        synchronized (DIAGNOSTIC_LOG) {
+            DIAGNOSTIC_LOG.append(entry).append("\n");
+            if (DIAGNOSTIC_LOG.length() > 30000) {
+                DIAGNOSTIC_LOG.delete(0, 10000);
+            }
+        }
+    }
+
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            log("USB_EVENT", "Evento recibido: " + action);
             if (ACTION_USB_PERMISSION.equals(action)) {
                 synchronized (this) {
                     UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        if (device != null && webView != null) {
-                            webView.post(() -> webView.evaluateJavascript("refreshDjiSlots(true)", null));
-                        }
+                    boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                    log("USB_PERM", "Permiso para " + (device != null ? device.getDeviceName() : "null") + " concedido=" + granted);
+                    if (granted && device != null && webView != null) {
+                        webView.post(() -> webView.evaluateJavascript("if (typeof refreshDjiSlots === 'function') refreshDjiSlots(true);", null));
                     }
+                }
+            } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                log("USB_ATTACH", "Dispositivo conectado al puerto: " + (device != null ? (device.getDeviceName() + " (" + device.getVendorId() + ":" + device.getProductId() + ")") : "desconocido"));
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(true);", null));
+                }
+            } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                log("USB_DETACH", "Dispositivo desconectado del puerto: " + (device != null ? device.getDeviceName() : "desconocido"));
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(false);", null));
+                }
+            } else if ("android.hardware.usb.action.USB_STATE".equals(action)) {
+                boolean connected = intent.getBooleanExtra("connected", false);
+                boolean configured = intent.getBooleanExtra("configured", false);
+                boolean mtp = intent.getBooleanExtra("mtp", false);
+                boolean adb = intent.getBooleanExtra("adb", false);
+                log("USB_STATE", "Estado USB: connected=" + connected + ", configured=" + configured + ", mtp=" + mtp + ", adb=" + adb);
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(" + connected + ");", null));
+                }
+            } else if (Intent.ACTION_POWER_CONNECTED.equals(action) || Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
+                boolean plugged = Intent.ACTION_POWER_CONNECTED.equals(action);
+                log("USB_POWER", "Cable USB alimentación/datos: " + (plugged ? "ENCHUFADO" : "DESENCHUFADO"));
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript("if (typeof onUsbHardwareChanged === 'function') onUsbHardwareChanged(" + plugged + ");", null));
                 }
             }
         }
@@ -167,6 +210,9 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter usbFilter = new IntentFilter(ACTION_USB_PERMISSION);
         usbFilter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         usbFilter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        usbFilter.addAction("android.hardware.usb.action.USB_STATE");
+        usbFilter.addAction(Intent.ACTION_POWER_CONNECTED);
+        usbFilter.addAction(Intent.ACTION_POWER_DISCONNECTED);
         registerReceiver(usbReceiver, usbFilter);
 
         webView.addJavascriptInterface(new WebAppInterface(this), "AndroidBridge");
@@ -349,49 +395,101 @@ public class MainActivity extends AppCompatActivity {
 
         private void scanMtpDevices(JSONArray array, Set<String> seenGuids) {
             try {
+                log("MTP_SCAN", "--- Iniciando escaneo de dispositivos USB MTP ---");
                 UsbManager usbMgr = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
-                if (usbMgr == null) return;
+                if (usbMgr == null) {
+                    log("MTP_SCAN", "UsbManager es NULL en este sistema.");
+                    return;
+                }
                 HashMap<String, UsbDevice> devices = usbMgr.getDeviceList();
-                if (devices == null || devices.isEmpty()) return;
+                int devCount = devices != null ? devices.size() : 0;
+                log("MTP_SCAN", "Dispositivos USB Host detectados: " + devCount);
 
-                for (UsbDevice dev : devices.values()) {
-                    boolean isMtp = false;
-                    for (int i = 0; i < dev.getInterfaceCount(); i++) {
-                        UsbInterface ui = dev.getInterface(i);
-                        if ((ui.getInterfaceClass() == UsbConstants.USB_CLASS_STILL_IMAGE && ui.getInterfaceSubclass() == 1)
-                                || ui.getInterfaceClass() == 6 || ui.getInterfaceClass() == 255) {
-                            isMtp = true;
-                            break;
+                // Comprobar estado de conexión USB periférica (cuando este dispositivo está enchufado a otro)
+                Intent batteryStatus = mContext.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                int chargePlug = batteryStatus != null ? batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) : -1;
+                boolean isUsbPlugged = (chargePlug == BatteryManager.BATTERY_PLUGGED_USB);
+                log("MTP_SCAN", "Puerto USB-C (Periférico / Conectado a Celular/PC): " + (isUsbPlugged ? "CONECTADO" : "DESCONECTADO (Batería)"));
+
+                if (devices != null && !devices.isEmpty()) {
+                    for (UsbDevice dev : devices.values()) {
+                        String devDesc = dev.getDeviceName() + " (VID=0x" + Integer.toHexString(dev.getVendorId()) + 
+                                         ", PID=0x" + Integer.toHexString(dev.getProductId()) + 
+                                         ", Prod=" + dev.getProductName() + 
+                                         ", Manuf=" + dev.getManufacturerName() + ")";
+                        log("MTP_DEV", "Analizando: " + devDesc);
+
+                        boolean isMtp = false;
+                        for (int i = 0; i < dev.getInterfaceCount(); i++) {
+                            UsbInterface ui = dev.getInterface(i);
+                            int cls = ui.getInterfaceClass();
+                            int sub = ui.getInterfaceSubclass();
+                            log("MTP_IFACE", "   Iface[" + i + "]: cls=" + cls + " sub=" + sub + " proto=" + ui.getInterfaceProtocol());
+                            if ((cls == UsbConstants.USB_CLASS_STILL_IMAGE && sub == 1)
+                                    || cls == 6 || cls == 255 || cls == 0) {
+                                isMtp = true;
+                            }
                         }
-                    }
-                    if (isMtp) {
-                        if (!usbMgr.hasPermission(dev)) {
-                            JSONObject prompt = new JSONObject();
-                            prompt.put("guid", "USB_PROMPT_" + dev.getDeviceId());
-                            prompt.put("name", "🔌 [DJI RC 2 MTP Conectado] - Toca para autorizar lectura");
-                            prompt.put("lastModified", "MTP USB Detectado");
-                            prompt.put("source", "usb_mtp");
-                            prompt.put("deviceId", dev.getDeviceId());
-                            array.put(prompt);
-                        } else {
-                            UsbDeviceConnection conn = usbMgr.openDevice(dev);
-                            if (conn != null) {
-                                MtpDevice mtp = new MtpDevice(dev);
-                                if (mtp.open(conn)) {
-                                    int[] storageIds = mtp.getStorageIds();
-                                    if (storageIds != null) {
-                                        for (int sId : storageIds) {
-                                            scanMtpStorageDir(mtp, sId, 0, array, seenGuids, 0);
-                                        }
-                                    }
-                                    mtp.close();
+
+                        if (dev.getVendorId() == 4129 || dev.getVendorId() == 0x2CA3 || 
+                            (dev.getProductName() != null && dev.getProductName().toUpperCase().contains("DJI")) ||
+                            (dev.getManufacturerName() != null && dev.getManufacturerName().toUpperCase().contains("DJI")) ||
+                            (dev.getDeviceName() != null && dev.getDeviceName().toUpperCase().contains("KATMAI"))) {
+                            isMtp = true;
+                            log("MTP_MATCH", "¡Dispositivo DJI / KATMAI reconocido!");
+                        }
+
+                        if (isMtp) {
+                            boolean hasPerm = usbMgr.hasPermission(dev);
+                            log("MTP_PERM", "Permiso USB para " + dev.getDeviceName() + ": " + (hasPerm ? "CONCEDIDO" : "PENDIENTE"));
+                            if (!hasPerm) {
+                                try {
+                                    PendingIntent pi = PendingIntent.getBroadcast(
+                                        mContext, 0, new Intent(ACTION_USB_PERMISSION),
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0
+                                    );
+                                    usbMgr.requestPermission(dev, pi);
+                                    log("MTP_PERM", "Solicitud de permiso enviada a la pantalla.");
+                                } catch (Exception permEx) {
+                                    log("MTP_PERM_ERR", "Error pidiendo permiso: " + permEx.getMessage());
                                 }
-                                conn.close();
+                                JSONObject prompt = new JSONObject();
+                                prompt.put("guid", "USB_PROMPT_" + dev.getDeviceId());
+                                prompt.put("name", "🔌 [DJI RC 2 MTP Detectado] - Toca para autorizar lectura");
+                                prompt.put("lastModified", "Esperando autorización USB");
+                                prompt.put("source", "usb_mtp");
+                                prompt.put("deviceId", dev.getDeviceId());
+                                array.put(prompt);
+                            } else {
+                                UsbDeviceConnection conn = usbMgr.openDevice(dev);
+                                if (conn != null) {
+                                    log("MTP_CONN", "UsbDeviceConnection establecida correctamente.");
+                                    MtpDevice mtp = new MtpDevice(dev);
+                                    if (mtp.open(conn)) {
+                                        log("MTP_OPEN", "MtpDevice.open() EXITOSO.");
+                                        int[] storageIds = mtp.getStorageIds();
+                                        int stCount = storageIds != null ? storageIds.length : 0;
+                                        log("MTP_STORAGE", "Almacenamientos MTP encontrados: " + stCount);
+                                        if (storageIds != null) {
+                                            for (int sId : storageIds) {
+                                                log("MTP_STORAGE", "Explorando volumen MTP 0x" + Integer.toHexString(sId));
+                                                scanMtpStorageDir(mtp, sId, 0, array, seenGuids, 0);
+                                            }
+                                        }
+                                        mtp.close();
+                                    } else {
+                                        log("MTP_OPEN_ERR", "mtp.open(conn) falló. Asegúrate de seleccionar 'Transferencia de archivos' en el control.");
+                                    }
+                                    conn.close();
+                                } else {
+                                    log("MTP_CONN_ERR", "No se pudo abrir UsbDeviceConnection (conn == null).");
+                                }
                             }
                         }
                     }
                 }
             } catch (Exception e) {
+                log("MTP_ERR", "Excepción en scanMtpDevices: " + e.getMessage());
                 e.printStackTrace();
             }
         }
@@ -407,6 +505,7 @@ public class MainActivity extends AppCompatActivity {
                     String name = info.getName();
                     if (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION) {
                         if ("waypoint".equalsIgnoreCase(name) || ".waypoint".equalsIgnoreCase(name)) {
+                            log("MTP_WP_FOUND", "Carpeta waypoint encontrada en MTP! Handle=" + h);
                             int[] slotHandles = mtp.getObjectHandles(storageId, 0, h);
                             if (slotHandles != null) {
                                 for (int sh : slotHandles) {
@@ -434,9 +533,10 @@ public class MainActivity extends AppCompatActivity {
                                             }
                                         }
                                         String sizeStr = sizeKb > 0 ? (" · " + sizeKb + " KB") : "";
-                                        slot.put("name", "Misión " + guid.substring(0, Math.min(8, guid.length())) + " [USB MTP · Control RC 2]" + sizeStr);
+                                        slot.put("name", "Misión " + guid.substring(0, Math.min(8, guid.length())) + " [MTP · Control RC 2]" + sizeStr);
                                         slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(sInfo.getDateModified() * 1000L)));
                                         array.put(slot);
+                                        log("MTP_SLOT", "Slot MTP agregado: " + guid);
                                     }
                                 }
                             }
@@ -445,11 +545,14 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log("MTP_DIR_ERR", "Error explorando carpeta MTP: " + e.getMessage());
+            }
         }
 
         @JavascriptInterface
         public void requestUsbMtpPermission(int deviceId) {
+            log("MTP_PERM_REQ", "Usuario tocó botón autorizar USB para id=" + deviceId);
             try {
                 UsbManager usbMgr = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
                 if (usbMgr != null) {
@@ -460,17 +563,80 @@ public class MainActivity extends AppCompatActivity {
                                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0
                             );
                             usbMgr.requestPermission(dev, pi);
+                            log("MTP_PERM_REQ", "Permiso solicitado para " + dev.getDeviceName());
                             break;
                         }
                     }
                 }
             } catch (Exception e) {
+                log("MTP_PERM_REQ_ERR", "Error solicitando permiso: " + e.getMessage());
                 e.printStackTrace();
             }
         }
 
         @JavascriptInterface
+        public String getDiagnosticLog() {
+            synchronized (DIAGNOSTIC_LOG) {
+                return DIAGNOSTIC_LOG.toString();
+            }
+        }
+
+        @JavascriptInterface
+        public void clearDiagnosticLog() {
+            synchronized (DIAGNOSTIC_LOG) {
+                DIAGNOSTIC_LOG.setLength(0);
+            }
+            log("DIAG", "Log reiniciado por el usuario");
+        }
+
+        @JavascriptInterface
+        public String getUsbConnectionStatus() {
+            JSONObject status = new JSONObject();
+            try {
+                status.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL + " (" + Build.DEVICE + ")");
+                status.put("androidVersion", Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
+
+                IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+                Intent batteryStatus = mContext.registerReceiver(null, ifilter);
+                int chargePlug = batteryStatus != null ? batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) : -1;
+                boolean usbPlugged = (chargePlug == BatteryManager.BATTERY_PLUGGED_USB);
+                status.put("usbPlugged", usbPlugged);
+                status.put("plugCode", chargePlug);
+
+                UsbManager usbMgr = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
+                JSONArray hostDevices = new JSONArray();
+                boolean hasDjiDevice = false;
+                if (usbMgr != null) {
+                    HashMap<String, UsbDevice> map = usbMgr.getDeviceList();
+                    if (map != null) {
+                        for (UsbDevice d : map.values()) {
+                            JSONObject devObj = new JSONObject();
+                            devObj.put("id", d.getDeviceId());
+                            devObj.put("name", d.getDeviceName());
+                            devObj.put("vendorId", d.getVendorId());
+                            devObj.put("productId", d.getProductId());
+                            devObj.put("hasPermission", usbMgr.hasPermission(d));
+                            hostDevices.put(devObj);
+                            if (d.getVendorId() == 4129 || d.getVendorId() == 0x2CA3 || 
+                                (d.getProductName() != null && d.getProductName().toUpperCase().contains("DJI"))) {
+                                hasDjiDevice = true;
+                            }
+                        }
+                    }
+                }
+                status.put("hostDevices", hostDevices);
+                status.put("hasDjiDevice", hasDjiDevice);
+                status.put("isHostMode", hostDevices.length() > 0);
+                status.put("isConnected", usbPlugged || hostDevices.length() > 0);
+            } catch (Exception e) {
+                try { status.put("error", e.getMessage()); } catch (Exception ignored) {}
+            }
+            return status.toString();
+        }
+
+        @JavascriptInterface
         public String forceScanDjiWaypointSlots() {
+            log("FORCE_SCAN", "=== USUARIO FORZÓ LECTURA DE WAYPOINTS ===");
             try {
                 android.content.SharedPreferences prefs = mContext.getSharedPreferences("dronmxe_slots", Context.MODE_PRIVATE);
                 prefs.edit().remove("cached_slots").apply();
@@ -480,7 +646,10 @@ public class MainActivity extends AppCompatActivity {
                 JSONArray arr = new JSONArray(result);
                 final int count = arr.length();
                 runOnUiThread(() -> {
-                    Toast.makeText(mContext, "Lectura forzada en RC 2: " + count + " misiones encontradas (Disco, Ocultas y MTP)", Toast.LENGTH_LONG).show();
+                    String msg = count > 0 ? 
+                        ("Lectura completada: " + count + " misiones encontradas.") :
+                        ("0 misiones encontradas. Conecta el celular al RC 2 vía USB MTP para leer.");
+                    Toast.makeText(mContext, msg, Toast.LENGTH_LONG).show();
                 });
             } catch (Exception ignored) {}
             return result;
@@ -492,13 +661,18 @@ public class MainActivity extends AppCompatActivity {
             Set<String> seenGuids = new HashSet<>();
 
             try {
+                log("SLOTS_SCAN", "--- Escaneando misiones de DJI Fly ---");
                 // 1. Escaneo USB MTP (si está conectado a un teléfono, tablet o PC)
                 scanMtpDevices(array, seenGuids);
 
-                // 2. Escaneo exhaustivo del almacenamiento local del control DJI RC 2 (Tarjeta MicroSD, Memoria Interna y Carpetas Ocultas)
+                // 2. Escaneo exhaustivo del almacenamiento local del control DJI RC 2
                 List<File> roots = getPossibleWaypointRoots();
+                log("SLOTS_SCAN", "Rutas posibles a inspeccionar en almacenamiento: " + roots.size());
                 for (File wpRoot : roots) {
-                    if (wpRoot.exists() && wpRoot.isDirectory()) {
+                    boolean exists = wpRoot.exists();
+                    boolean isDir = exists && wpRoot.isDirectory();
+                    log("STORAGE_ROOT", wpRoot.getAbsolutePath() + " [Existe=" + exists + ", Dir=" + isDir + ", Lectura=" + wpRoot.canRead() + ", Escritura=" + wpRoot.canWrite() + "]");
+                    if (isDir) {
                         boolean isSdCard = !wpRoot.getAbsolutePath().startsWith(Environment.getExternalStorageDirectory().getAbsolutePath());
                         boolean isHidden = wpRoot.getName().startsWith(".") || wpRoot.getAbsolutePath().contains("/.");
                         String storageLabel;
@@ -511,6 +685,7 @@ public class MainActivity extends AppCompatActivity {
                         File[] subDirs = wpRoot.listFiles();
                         if (subDirs == null || subDirs.length == 0) {
                             List<String> shDirs = listDirectoryViaShell(wpRoot.getAbsolutePath());
+                            log("SHELL_SCAN", "Shell listó en " + wpRoot.getName() + ": " + shDirs.size() + " elementos");
                             if (!shDirs.isEmpty()) {
                                 List<File> temp = new ArrayList<>();
                                 for (String sd : shDirs) temp.add(new File(wpRoot, sd));
@@ -519,6 +694,7 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         if (subDirs != null) {
+                            log("SLOTS_DIR", "Subdirectorios en " + wpRoot.getAbsolutePath() + ": " + subDirs.length);
                             Arrays.sort(subDirs, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
                             for (File slotDir : subDirs) {
                                 if (slotDir.isDirectory()) {
@@ -557,45 +733,23 @@ public class MainActivity extends AppCompatActivity {
                                     slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(slotDir.lastModified())));
                                     slot.put("source", isSdCard ? "sdcard" : "internal");
                                     array.put(slot);
+                                    log("SLOT_DETECTED", "Misión real encontrada: " + displayName + " (" + guid + ")");
                                 }
                             }
                         }
                     }
                 }
 
-                // Guardar en caché persistente del control
+                log("SLOTS_RESULT", "Total de misiones leídas: " + array.length());
+                // Si hay slots reales, guardar en caché. Si no hay ninguno, NO inyectar slots ficticios por defecto.
                 android.content.SharedPreferences prefs = mContext.getSharedPreferences("dronmxe_slots", Context.MODE_PRIVATE);
                 if (array.length() > 0) {
                     prefs.edit().putString("cached_slots", array.toString()).apply();
                 } else {
-                    String cached = prefs.getString("cached_slots", null);
-                    if (cached != null && !cached.isEmpty()) {
-                        return cached;
-                    } else {
-                        String[][] defaultRcSlots = new String[][]{
-                            {"DF5F9C06-1155-4737-9376-B36B0DD6E9F8", "Misión DF5F9C06 [Tarjeta SD · RC 2]", "2026-09-30 11:19"},
-                            {"087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", "Misión 087A9AFE [Tarjeta SD · RC 2]", "2026-08-22 18:44"},
-                            {"A73A8028-48C1-4FA9-9670-D30FD639AD1B", "Misión A73A8028 [Tarjeta SD · RC 2]", "2026-08-22 18:42"},
-                            {"8F99B63E-F707-4453-B57F-C4E6FAE18B1F", "Misión 8F99B63E [Tarjeta SD · RC 2]", "2026-08-22 18:28"},
-                            {"F679F105-5936-4C75-B4D2-34AB49D51BCE", "Misión F679F105 [Tarjeta SD · RC 2]", "2026-08-22 18:21"},
-                            {"1DBB6B29-0B1A-460C-A296-4BF5F146BA28", "Misión 1DBB6B29 [Tarjeta SD · RC 2]", "2026-08-22 18:16"},
-                            {"EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", "Misión EA5FA18E [Tarjeta SD · RC 2]", "2026-08-22 17:57"},
-                            {"09E4DA39-1594-44A3-A1E9-890E731ED678", "Misión 09E4DA39 [Tarjeta SD · RC 2]", "2026-08-22 17:51"},
-                            {"E1E5C00D-1B0E-4175-ACB3-F152BA208768", "Misión E1E5C00D [Tarjeta SD · RC 2]", "2026-08-22 17:40"},
-                            {"5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", "Misión 5A8E7050 [Tarjeta SD · RC 2]", "2026-08-22 17:34"},
-                            {"D378CA50-5D87-41B1-B126-045C20BA5816", "Misión D378CA50 [Tarjeta SD · RC 2]", "2026-08-22 17:29"}
-                        };
-                        for (String[] row : defaultRcSlots) {
-                            JSONObject slot = new JSONObject();
-                            slot.put("guid", row[0]);
-                            slot.put("name", row[1]);
-                            slot.put("lastModified", row[2]);
-                            slot.put("source", "sdcard");
-                            array.put(slot);
-                        }
-                    }
+                    log("SLOTS_RESULT", "0 misiones encontradas. Se retorna lista vacía []. Requiere conectar celular USB MTP.");
                 }
             } catch (Exception e) {
+                log("SLOTS_ERR", "Error en getDjiWaypointSlots: " + e.getMessage());
                 e.printStackTrace();
             }
             return array.toString();
