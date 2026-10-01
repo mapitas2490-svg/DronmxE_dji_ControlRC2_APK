@@ -468,9 +468,13 @@ public class MainActivity extends AppCompatActivity {
                 result.put("downloadPath", kmzFile.getAbsolutePath());
 
                 boolean injected = false;
+                String targetGuid = targetSlotGuid;
+                if (targetGuid == null || targetGuid.isEmpty() || "NEW".equals(targetGuid)) {
+                    targetGuid = java.util.UUID.randomUUID().toString().toUpperCase();
+                }
 
                 // 2. Si el slot proviene de Litchi Hub Bridge o se seleccionó un slot remoto
-                if (targetSlotGuid != null && !targetSlotGuid.isEmpty() && !"NEW".equals(targetSlotGuid)) {
+                if (!"NEW".equals(targetSlotGuid) && targetSlotGuid != null && !targetSlotGuid.isEmpty()) {
                     boolean bridgeOk = overwriteViaLitchiBridge(targetSlotGuid, decodedBytes, targetSlotGuid + ".kmz");
                     if (bridgeOk) {
                         injected = true;
@@ -481,45 +485,46 @@ public class MainActivity extends AppCompatActivity {
                 // 3. Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD y Memoria Interna)
                 List<File> roots = getPossibleWaypointRoots();
                 for (File wpRoot : roots) {
-                    if (wpRoot.exists() && wpRoot.canWrite()) {
-                        if (targetSlotGuid != null && !targetSlotGuid.isEmpty() && !"NEW".equals(targetSlotGuid)) {
-                            File slotDir = new File(wpRoot, targetSlotGuid);
-                            if (slotDir.exists() || wpRoot.canWrite()) {
-                                if (!slotDir.exists()) slotDir.mkdirs();
+                    try {
+                        if (!wpRoot.exists()) {
+                            wpRoot.mkdirs();
+                        }
+                        File slotDir = new File(wpRoot, targetGuid);
+                        if (!slotDir.exists()) {
+                            slotDir.mkdirs();
+                        }
 
-                                File targetKmz = new File(slotDir, targetSlotGuid + ".kmz");
-                                if (targetKmz.exists()) {
-                                    // Backup automático idéntico a Litchi Hub
-                                    File bak = new File(slotDir, targetSlotGuid + ".kmz.lchbak");
-                                    targetKmz.renameTo(bak);
-                                }
-                                FileOutputStream fosSlot = new FileOutputStream(targetKmz);
-                                fosSlot.write(decodedBytes);
-                                fosSlot.close();
-
-                                File missionKmz = new File(slotDir, missionName + ".kmz");
-                                FileOutputStream fosMission = new FileOutputStream(missionKmz);
-                                fosMission.write(decodedBytes);
-                                fosMission.close();
-
-                                injected = true;
-                                result.put("slotInjected", targetSlotGuid);
-                                result.put("targetRoot", wpRoot.getAbsolutePath());
+                        if (slotDir.exists()) {
+                            File targetKmz = new File(slotDir, targetGuid + ".kmz");
+                            if (targetKmz.exists()) {
+                                // Backup automático idéntico a Litchi Hub
+                                File bak = new File(slotDir, targetGuid + ".kmz.lchbak");
+                                targetKmz.renameTo(bak);
                             }
-                        } else {
-                            File rootKmz = new File(wpRoot, missionName + ".kmz");
-                            FileOutputStream fosRoot = new FileOutputStream(rootKmz);
-                            fosRoot.write(decodedBytes);
-                            fosRoot.close();
-                            injected = true;
-                            result.put("slotInjected", "waypoint_root");
-                        }
+                            FileOutputStream fosSlot = new FileOutputStream(targetKmz);
+                            fosSlot.write(decodedBytes);
+                            fosSlot.close();
 
-                        // Actualizar o crear historial
-                        File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
-                        if (!historyFile.exists()) {
-                            try { historyFile.createNewFile(); } catch (Exception ignored) {}
+                            File missionKmz = new File(slotDir, missionName + ".kmz");
+                            FileOutputStream fosMission = new FileOutputStream(missionKmz);
+                            fosMission.write(decodedBytes);
+                            fosMission.close();
+
+                            slotDir.setLastModified(System.currentTimeMillis());
+                            targetKmz.setLastModified(System.currentTimeMillis());
+
+                            injected = true;
+                            result.put("slotInjected", targetGuid);
+                            result.put("targetRoot", wpRoot.getAbsolutePath());
+
+                            // Actualizar o crear historial
+                            File historyFile = new File(wpRoot, ".offlineflightmission_history.txt");
+                            if (!historyFile.exists()) {
+                                try { historyFile.createNewFile(); } catch (Exception ignored) {}
+                            }
                         }
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
 

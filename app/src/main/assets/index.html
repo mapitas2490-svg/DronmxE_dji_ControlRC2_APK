@@ -1050,17 +1050,77 @@
 
     /* Custom Leaflet Map styling */
     .leaflet-bar { border: none !important; box-shadow: var(--shadow-md) !important; }
+    
+    .btn-top-inject-dji {
+      background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+      color: #ffffff;
+      border: none;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(30, 136, 229, 0.35);
+      transition: all 0.15s ease;
+      margin: 4px 10px 4px 10px;
+    }
+    .btn-top-inject-dji:active {
+      transform: scale(0.97);
+      box-shadow: 0 1px 4px rgba(30, 136, 229, 0.2);
+    }
+
     .custom-vertex-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+    }
+    .custom-vertex-icon:active {
+      cursor: grabbing;
+    }
+    .vertex-dot {
+      width: 24px;
+      height: 24px;
       background: #ffffff;
-      border: 3px solid #7c4dff;
+      border: 3.5px solid #7c4dff;
       border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s ease;
+    }
+    .vertex-number {
+      font-size: 11px;
+      font-weight: 800;
+      color: #7c4dff;
+      line-height: 1;
     }
     .custom-midpoint-icon {
-      background: #d8ccf8;
-      border: 2px solid #7c4dff;
+      width: 20px;
+      height: 20px;
+      background: #ede9fe;
+      border: 2px dashed #7c4dff;
       border-radius: 50%;
-      opacity: 0.85;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 900;
+      color: #7c4dff;
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+    .custom-midpoint-icon:hover, .custom-midpoint-icon:active {
+      transform: scale(1.25);
+      background: #7c4dff;
+      color: #ffffff;
     }
     .custom-takeoff-icon {
       background: #2e7d32;
@@ -1124,6 +1184,11 @@
         <div class="mode-tab" id="tab-mode-circle" onclick="setMissionMode('Circle')">Círculo</div>
       </div>
 
+      <!-- Botón Superior Destacado: Inyectar en DJI Fly -->
+      <button class="btn-top-inject-dji" onclick="openSendToDjiFlyModal()">
+        🚀 Inyectar Misión en DJI Fly
+      </button>
+
       <!-- Missions Library List -->
       <div class="drawer-content">
         <div class="section-title">
@@ -1151,6 +1216,11 @@
           <span style="font-size: 0.78rem; color: var(--text-muted); cursor: pointer;" onclick="switchToView('map')">Volver al mapa</span>
         </div>
       </div>
+
+      <!-- Botón Superior Destacado: Inyectar en DJI Fly -->
+      <button class="btn-top-inject-dji" onclick="openSendToDjiFlyModal()">
+        🚀 Inyectar Misión en DJI Fly
+      </button>
 
       <div class="drawer-content">
         <!-- Top Stats Chip Card -->
@@ -1479,13 +1549,13 @@
             <button class="btn-refresh" onclick="refreshDjiSlots()">↻</button>
           </div>
 
-          <div id="dji-slots-container" class="modal-slots-list"></div>
-
-          <button class="btn-export-pill" style="margin-top: 10px; background: var(--primary); color: #fff; justify-content: center; padding: 12px;" onclick="executeDjiInjection()">
+          <button class="btn-export-pill" style="margin: 8px 0 10px 0; background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%); color: #fff; justify-content: center; padding: 12px; font-weight: 800; font-size: 0.88rem; box-shadow: var(--shadow-md); width: 100%;" onclick="executeDjiInjection()">
             🚀 Inyectar Misión en DJI Fly
           </button>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+          <div id="dji-slots-container" class="modal-slots-list"></div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
             <button class="btn-export-pill" style="justify-content: center;" onclick="saveKmzToDownloads()">💾 Descargas</button>
             <button class="btn-export-pill" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;" onclick="shareKmzMission()">📤 Compartir</button>
           </div>
@@ -1762,6 +1832,29 @@
       updateStatDisplay(0, 0, 0, 0);
     }
 
+    let activePolygonLayer = null;
+    let activeExpanded3DLayer = null;
+
+    function expandPolygonOutward(pts, bufferMeters) {
+      if (pts.length < 3) return pts;
+      const centroid = calculateCentroid(pts);
+      const cLat = centroid.lat;
+      const cLng = centroid.lng;
+      const latScale = 111320;
+      const lngScale = 111320 * Math.cos(cLat * Math.PI / 180);
+
+      return pts.map(p => {
+        const dx = (p.lng - cLng) * lngScale;
+        const dy = (p.lat - cLat) * latScale;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1) return p;
+        const scale = (dist + bufferMeters) / dist;
+        const newX = dx * scale;
+        const newY = dy * scale;
+        return L.latLng(cLat + newY / latScale, cLng + newX / lngScale);
+      });
+    }
+
     function renderBoundary() {
       polygonLayer.clearLayers();
       markersLayer.clearLayers();
@@ -1772,44 +1865,100 @@
       if (pts.length < 2) return;
 
       if (AppState.mode === 'Corridor') {
-        L.polyline(pts, {
+        activePolygonLayer = L.polyline(pts, {
           color: '#1e88e5',
           weight: 4,
           lineJoin: 'round'
         }).addTo(polygonLayer);
       } else if (pts.length >= 3) {
-        L.polygon(pts, {
+        // En modo 3D, trazar el perímetro expandido de vuelo para cubrir fachadas exteriores
+        if (AppState.mode === '3D') {
+          const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+          const H = AppState.altitude;
+          const footprintW = (H * cam.sensorW) / cam.focal;
+          const bufferMeters = Math.max(25, Math.round(footprintW * 0.45));
+          const expPts = expandPolygonOutward(pts, bufferMeters);
+          activeExpanded3DLayer = L.polygon(expPts, {
+            color: '#0284c7',
+            weight: 2,
+            dashArray: '6, 6',
+            fillColor: '#38bdf8',
+            fillOpacity: 0.08
+          }).addTo(polygonLayer);
+        }
+
+        activePolygonLayer = L.polygon(pts, {
           color: '#7c4dff',
           weight: 3,
           fillColor: '#7c4dff',
-          fillOpacity: 0.15,
+          fillOpacity: 0.16,
           lineJoin: 'round'
         }).addTo(polygonLayer);
       } else {
-        L.polyline(pts, {
+        activePolygonLayer = L.polyline(pts, {
           color: '#7c4dff',
           weight: 3,
           dashArray: '6, 6'
         }).addTo(polygonLayer);
       }
 
+      // Vértices interactivos optimizados (arrastre ultra fluido sin destruir marcadores)
       pts.forEach((pt, idx) => {
         const marker = L.marker(pt, {
           draggable: true,
           icon: L.divIcon({
             className: 'custom-vertex-icon',
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
+            html: `<div class="vertex-dot"><span class="vertex-number">${idx + 1}</span></div>`,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
           })
         }).addTo(markersLayer);
 
         marker.on('drag', function(e) {
           AppState.points[idx] = e.target.getLatLng();
+          if (activePolygonLayer) {
+            activePolygonLayer.setLatLngs(AppState.points);
+          }
+          if (AppState.mode === '3D' && activeExpanded3DLayer && AppState.points.length >= 3) {
+            const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+            const H = AppState.altitude;
+            const footprintW = (H * cam.sensorW) / cam.focal;
+            const bufferMeters = Math.max(25, Math.round(footprintW * 0.45));
+            activeExpanded3DLayer.setLatLngs(expandPolygonOutward(AppState.points, bufferMeters));
+          }
+          recalculateFlightLinesFast();
+        });
+
+        marker.on('dragend', function(e) {
+          AppState.points[idx] = e.target.getLatLng();
           renderBoundary();
           recalculateMission();
         });
+
+        // Opciones al tocar vértice
+        marker.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);
+          if (AppState.points.length > 3) {
+            const popupDiv = document.createElement('div');
+            popupDiv.style.textAlign = 'center';
+            popupDiv.innerHTML = `
+              <div style="font-weight: 700; font-size: 0.8rem; margin-bottom: 5px;">Vértice #${idx + 1}</div>
+              <button style="background: #ef4444; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">
+                🗑️ Eliminar Vértice
+              </button>
+            `;
+            popupDiv.querySelector('button').onclick = function() {
+              AppState.points.splice(idx, 1);
+              map.closePopup();
+              renderBoundary();
+              recalculateMission();
+            };
+            L.popup().setLatLng(e.target.getLatLng()).setContent(popupDiv).openOn(map);
+          }
+        });
       });
 
+      // Puntos medios interactivos para insertar vértices (+)
       if (pts.length >= 3 && AppState.mode !== 'Corridor') {
         for (let i = 0; i < pts.length; i++) {
           const nextIdx = (i + 1) % pts.length;
@@ -1820,12 +1969,14 @@
           const midMarker = L.marker(midPoint, {
             icon: L.divIcon({
               className: 'custom-midpoint-icon',
-              iconSize: [10, 10],
-              iconAnchor: [5, 5]
+              html: `<span>+</span>`,
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
             })
           }).addTo(markersLayer);
 
-          midMarker.on('click', function() {
+          midMarker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
             AppState.points.splice(i + 1, 0, midPoint);
             renderBoundary();
             recalculateMission();
@@ -1843,6 +1994,39 @@
       }
     }
 
+    function recalculateFlightLinesFast() {
+      flightLinesLayer.clearLayers();
+      if (AppState.points.length < 2) return;
+
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+      const H = AppState.altitude;
+      const footprintW = (H * cam.sensorW) / cam.focal;
+      const footprintH = (H * cam.sensorH) / cam.focal;
+      const lineSpacing = footprintW * (1 - (AppState.sideOverlap / 100));
+      const photoSpacing = footprintH * (1 - (AppState.frontOverlap / 100));
+
+      let gridWaypoints = [];
+      if (AppState.mode === 'Corridor') {
+        gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+      } else if (AppState.mode === '3D') {
+        const bufferMeters = Math.max(25, Math.round(footprintW * 0.45));
+        const expandedPts = expandPolygonOutward(AppState.points, bufferMeters);
+        gridWaypoints = generateCrossTransectWaylines(expandedPts, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+      } else {
+        gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+      }
+      AppState.waylines = gridWaypoints;
+
+      if (gridWaypoints.length > 1) {
+        L.polyline(gridWaypoints.map(w => [w.lat, w.lng]), {
+          color: '#ffd54f',
+          weight: 3.5,
+          opacity: 0.95,
+          lineJoin: 'round'
+        }).addTo(flightLinesLayer);
+      }
+    }
+
     function updatePointBadge() {
       const count = AppState.points.length;
       const badge = document.getElementById('map-points-badge');
@@ -1851,7 +2035,7 @@
       } else if (count < 3) {
         badge.textContent = `${count} puntos — agrega ${3 - count} más`;
       } else {
-        badge.textContent = `${count} puntos — listo`;
+        badge.textContent = `${count} vértices — arrastra para editar`;
       }
     }
 
@@ -1912,7 +2096,9 @@
       if (AppState.mode === 'Corridor') {
         gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
       } else if (AppState.mode === '3D') {
-        gridWaypoints = generateCrossTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+        const bufferMeters = Math.max(25, Math.round(footprintW * 0.45));
+        const expandedPts = expandPolygonOutward(AppState.points, bufferMeters);
+        gridWaypoints = generateCrossTransectWaylines(expandedPts, lineSpacing, photoSpacing, AppState.gridAngle || 0);
       } else {
         gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
       }
@@ -1920,7 +2106,8 @@
 
       const photoIntervalEl = document.getElementById('disp-photo-interval');
       if (photoIntervalEl) {
-        photoIntervalEl.innerHTML = `📸 <b>1 foto por Waypoint</b> (${gridWaypoints.length} fotos calculadas · separación: ~${photoSpacing.toFixed(1)} m para ${AppState.frontOverlap}% solape)`;
+        const modeLabel = AppState.mode === '3D' ? ' (Malla 3D expandida +25m)' : '';
+        photoIntervalEl.innerHTML = `📸 <b>1 foto por Waypoint</b> (${gridWaypoints.length} fotos calculadas · separación: ~${photoSpacing.toFixed(1)} m para ${AppState.frontOverlap}% solape${modeLabel})`;
       }
 
       if (gridWaypoints.length > 1) {
