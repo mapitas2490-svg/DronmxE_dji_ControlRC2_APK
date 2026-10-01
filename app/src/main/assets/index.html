@@ -1573,6 +1573,52 @@
   </div>
 
   <!-- =========================================================
+       MODAL: REQUERIR CONEXIÓN DE CELULAR MTP
+       ========================================================= -->
+  <div id="modal-require-phone-mtp" class="modal-overlay">
+    <div class="modal-card" style="max-width: 480px; border-top: 4px solid #9333ea;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 1.5rem;">🔌📱</span>
+        <h3 class="modal-title" style="margin: 0; color: #581c87;">Paso Requerido: Conectar Celular</h3>
+      </div>
+      
+      <div style="background: #faf5ff; border: 1px solid #d8b4fe; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <p style="margin: 0; font-size: 0.83rem; color: #6b21a8; line-height: 1.4;">
+          Para escribir la misión en la <strong>memoria interna protegida de DJI Fly</strong> del control RC 2, es indispensable conectar el teléfono celular mediante cable USB-C en modo <strong>MTP (Transferencia de archivos)</strong>.
+        </p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; font-size: 0.8rem; color: var(--text-main);">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <span style="background: #9333ea; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: bold; flex-shrink: 0;">1</span>
+          <span>Conecta el <strong>cable USB-C</strong> entre el control DJI RC 2 y tu teléfono celular.</span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <span style="background: #9333ea; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: bold; flex-shrink: 0;">2</span>
+          <span>En la pantalla del control RC 2, confirma <strong>"Transferencia de archivos (MTP)"</strong>.</span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <span style="background: #9333ea; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: bold; flex-shrink: 0;">3</span>
+          <span>Pulsa el botón de abajo para <strong>proceder con la inyección directa</strong>.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-export-pill" style="background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%); color: #fff; justify-content: center; padding: 12px; font-weight: 800; font-size: 0.88rem; width: 100%; border: none;" onclick="confirmDjiInjectionWithPhone()">
+          ✅ Celular Conectado — Inyectar en DJI Fly
+        </button>
+        <button type="button" class="btn-outline-pill" style="border-color: #a855f7; color: #7e22ce; background: #fff; font-size: 0.78rem; padding: 8px; justify-content: center;" onclick="refreshDjiSlots(true)">
+          🔄 Verificar Reconocimiento MTP / USB
+        </button>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;">
+        <button class="modal-btn-close" onclick="closeModal('modal-require-phone-mtp')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
        MODAL 1: SEND TO DJI FLY
        ========================================================= -->
   <div id="modal-send-dji" class="modal-overlay">
@@ -3195,7 +3241,21 @@
       }
     }
 
-    async function executeDjiInjection() {
+    function promptConnectPhoneForInjection() {
+      openModal('modal-require-phone-mtp');
+    }
+
+    async function confirmDjiInjectionWithPhone() {
+      closeModal('modal-require-phone-mtp');
+      await executeDjiInjection(true);
+    }
+
+    async function executeDjiInjection(force = false) {
+      if (!force) {
+        promptConnectPhoneForInjection();
+        return;
+      }
+
       const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
       const slot = AppState.activeSlotGuid;
       const base64Data = await buildDjiKmzBlob(fileName);
@@ -3203,6 +3263,9 @@
       if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
         window.AndroidBridge.saveKmzMission(base64Data, fileName, slot);
         closeModal('modal-send-dji');
+        if (typeof showToast === 'function') {
+          showToast('Inyección completada a través del puente MTP hacia DJI Fly', 'success');
+        }
       } else {
         closeModal('modal-send-dji');
       }
