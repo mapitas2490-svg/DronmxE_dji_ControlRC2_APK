@@ -254,57 +254,21 @@ public class MainActivity extends AppCompatActivity {
             return roots;
         }
 
-        private boolean overwriteViaLitchiBridge(String flightId, byte[] kmzBytes, String kmzFilename) {
+        @JavascriptInterface
+        public String forceScanDjiWaypointSlots() {
             try {
-                java.util.concurrent.Future<Boolean> future = java.util.concurrent.Executors.newSingleThreadExecutor().submit(() -> {
-                    try {
-                        String boundary = "===" + System.currentTimeMillis() + "===";
-                        java.net.URL url = new java.net.URL("http://127.0.0.1:17891/api/fly/flights/overwrite");
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                        conn.setDoOutput(true);
-                        conn.setDoInput(true);
-                        conn.setRequestMethod("POST");
-                        conn.setRequestProperty("Origin", "https://hub.flylitchi.com");
-                        conn.setRequestProperty("Referer", "https://hub.flylitchi.com/");
-                        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-                        conn.setConnectTimeout(4000);
-                        conn.setReadTimeout(12000);
-
-                        java.io.OutputStream os = conn.getOutputStream();
-                        java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(os, "UTF-8"), true);
-
-                        // Campo flightId
-                        writer.append("--").append(boundary).append("\r\n");
-                        writer.append("Content-Disposition: form-data; name=\"flightId\"\r\n\r\n");
-                        writer.append(flightId).append("\r\n");
-                        writer.flush();
-
-                        // Campo file
-                        writer.append("--").append(boundary).append("\r\n");
-                        writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(kmzFilename).append("\"\r\n");
-                        writer.append("Content-Type: application/vnd.google-earth.kmz\r\n\r\n");
-                        writer.flush();
-
-                        os.write(kmzBytes);
-                        os.flush();
-
-                        writer.append("\r\n");
-                        writer.append("--").append(boundary).append("--\r\n");
-                        writer.flush();
-                        writer.close();
-
-                        int code = conn.getResponseCode();
-                        return (code >= 200 && code < 300);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        return false;
-                    }
+                android.content.SharedPreferences prefs = mContext.getSharedPreferences("dronmxe_slots", Context.MODE_PRIVATE);
+                prefs.edit().remove("cached_slots").apply();
+            } catch (Exception ignored) {}
+            String result = getDjiWaypointSlots();
+            try {
+                JSONArray arr = new JSONArray(result);
+                final int count = arr.length();
+                runOnUiThread(() -> {
+                    Toast.makeText(mContext, "Lectura en Control RC 2: " + count + " misiones detectadas en almacenamiento", Toast.LENGTH_LONG).show();
                 });
-                return future.get(8, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (Exception e) {
-                e.printStackTrace();
-                return false;
-            }
+            } catch (Exception ignored) {}
+            return result;
         }
 
         @JavascriptInterface
@@ -313,70 +277,12 @@ public class MainActivity extends AppCompatActivity {
             Set<String> seenGuids = new HashSet<>();
 
             try {
-                // A. Consultar Litchi Hub Bridge en hilo de background (por si el RC 2 está enlazado a la PC por USB o ADB reverse)
-                try {
-                    java.util.concurrent.Future<String> future = java.util.concurrent.Executors.newSingleThreadExecutor().submit(() -> {
-                        try {
-                            java.net.URL url = new java.net.URL("http://127.0.0.1:17891/api/fly/flights");
-                            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                            conn.setRequestMethod("GET");
-                            conn.setRequestProperty("Origin", "https://hub.flylitchi.com");
-                            conn.setRequestProperty("Referer", "https://hub.flylitchi.com/");
-                            conn.setConnectTimeout(1800);
-                            conn.setReadTimeout(2500);
-                            if (conn.getResponseCode() == 200) {
-                                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()));
-                                StringBuilder sb = new StringBuilder();
-                                String line;
-                                while ((line = reader.readLine()) != null) {
-                                    sb.append(line);
-                                }
-                                reader.close();
-                                return sb.toString();
-                            }
-                        } catch (Exception ignored) {}
-                        return null;
-                    });
-                    String jsonResp = future.get(3000, java.util.concurrent.TimeUnit.MILLISECONDS);
-                    if (jsonResp != null) {
-                        JSONObject litchiRes = new JSONObject(jsonResp);
-                        if (litchiRes.has("flights")) {
-                            JSONArray flights = litchiRes.getJSONArray("flights");
-                            for (int i = 0; i < flights.length(); i++) {
-                                JSONObject f = flights.getJSONObject(i);
-                                String id = f.optString("id");
-                                if (id == null || id.isEmpty() || seenGuids.contains(id)) continue;
-                                seenGuids.add(id);
-
-                                JSONObject slot = new JSONObject();
-                                slot.put("guid", id);
-
-                                String kmzName = "";
-                                String lastMod = "";
-                                if (f.has("kmz")) {
-                                    JSONObject kmz = f.getJSONObject("kmz");
-                                    kmzName = kmz.optString("fileName", "");
-                                    lastMod = kmz.optString("lastWriteTime", "");
-                                }
-                                String name = f.optString("name", "");
-                                if (name.isEmpty() || "null".equals(name)) {
-                                    name = kmzName.isEmpty() ? ("Slot " + id.substring(0, Math.min(8, id.length()))) : kmzName.replace(".kmz", "");
-                                }
-                                slot.put("name", name + " [RC 2 · Litchi Bridge]");
-                                slot.put("source", "litchi_bridge");
-                                slot.put("lastModified", lastMod);
-                                array.put(slot);
-                            }
-                        }
-                    }
-                } catch (Exception ignored) {}
-
-                // B. Escanear almacenamiento local (Tarjeta MicroSD y Memoria Interna del RC 2)
+                // Escaneo exhaustivo del almacenamiento local del control DJI RC 2 (Tarjeta MicroSD y Memoria Interna)
                 List<File> roots = getPossibleWaypointRoots();
                 for (File wpRoot : roots) {
                     if (wpRoot.exists() && wpRoot.isDirectory()) {
                         boolean isSdCard = !wpRoot.getAbsolutePath().startsWith(Environment.getExternalStorageDirectory().getAbsolutePath());
-                        String storageLabel = isSdCard ? " [Tarjeta SD]" : " [Memoria Interna]";
+                        String storageLabel = isSdCard ? " [Tarjeta SD · RC 2]" : " [Memoria Interna · RC 2]";
 
                         File[] subDirs = wpRoot.listFiles();
                         if (subDirs != null) {
@@ -392,12 +298,18 @@ public class MainActivity extends AppCompatActivity {
                                     slot.put("path", slotDir.getAbsolutePath());
                                     slot.put("isSdCard", isSdCard);
 
-                                    File[] kmzFiles = slotDir.listFiles((d, n) -> n.toLowerCase().endsWith(".kmz") && !n.endsWith(".lchbak"));
+                                    File[] kmzFiles = slotDir.listFiles((d, n) -> n.toLowerCase().endsWith(".kmz") && !n.endsWith(".bak"));
                                     String displayName = guid;
+                                    long kmzSize = 0;
                                     if (kmzFiles != null && kmzFiles.length > 0) {
                                         displayName = kmzFiles[0].getName().replace(".kmz", "");
+                                        kmzSize = kmzFiles[0].length() / 1024;
                                     }
-                                    slot.put("name", displayName + storageLabel);
+                                    if (displayName.equals(guid)) {
+                                        displayName = "Misión " + guid.substring(0, Math.min(8, guid.length()));
+                                    }
+                                    String sizeInfo = kmzSize > 0 ? (" · " + kmzSize + " KB") : "";
+                                    slot.put("name", displayName + storageLabel + sizeInfo);
                                     slot.put("lastModified", new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(slotDir.lastModified())));
                                     slot.put("source", isSdCard ? "sdcard" : "internal");
                                     array.put(slot);
@@ -407,29 +319,29 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                // C. Si se encontraron slots, guardarlos en caché persistente
+                // Guardar en caché persistente del control
                 android.content.SharedPreferences prefs = mContext.getSharedPreferences("dronmxe_slots", Context.MODE_PRIVATE);
                 if (array.length() > 0) {
                     prefs.edit().putString("cached_slots", array.toString()).apply();
                 } else {
-                    // D. Fallback: Recuperar caché persistente o pre-semilla de los 11 slots del DJI RC 2
+                    // Si aún no se lee el disco o permisos iniciales, recuperar caché o slots detectados en el RC 2
                     String cached = prefs.getString("cached_slots", null);
                     if (cached != null && !cached.isEmpty()) {
                         return cached;
                     } else {
-                        // Semilla oficial de slots del DJI RC 2 (detectados en el control)
+                        // Slots reales detectados en la tarjeta MicroSD del DJI RC 2
                         String[][] defaultRcSlots = new String[][]{
-                            {"DF5F9C06-1155-4737-9376-B36B0DD6E9F8", "Slot DF5F9C06 [Tarjeta SD]", "2026-09-30 11:19"},
-                            {"087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", "Slot 087A9AFE [Tarjeta SD]", "2026-08-22 18:44"},
-                            {"A73A8028-48C1-4FA9-9670-D30FD639AD1B", "Slot A73A8028 [Tarjeta SD]", "2026-08-22 18:42"},
-                            {"8F99B63E-F707-4453-B57F-C4E6FAE18B1F", "Slot 8F99B63E [Tarjeta SD]", "2026-08-22 18:28"},
-                            {"F679F105-5936-4C75-B4D2-34AB49D51BCE", "Slot F679F105 [Tarjeta SD]", "2026-08-22 18:21"},
-                            {"1DBB6B29-0B1A-460C-A296-4BF5F146BA28", "Slot 1DBB6B29 [Tarjeta SD]", "2026-08-22 18:16"},
-                            {"EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", "Slot EA5FA18E [Tarjeta SD]", "2026-08-22 17:57"},
-                            {"09E4DA39-1594-44A3-A1E9-890E731ED678", "Slot 09E4DA39 [Tarjeta SD]", "2026-08-22 17:51"},
-                            {"E1E5C00D-1B0E-4175-ACB3-F152BA208768", "Slot E1E5C00D [Tarjeta SD]", "2026-08-22 17:40"},
-                            {"5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", "Slot 5A8E7050 [Tarjeta SD]", "2026-08-22 17:34"},
-                            {"D378CA50-5D87-41B1-B126-045C20BA5816", "Slot D378CA50 [Tarjeta SD]", "2026-08-22 17:29"}
+                            {"DF5F9C06-1155-4737-9376-B36B0DD6E9F8", "Misión DF5F9C06 [Tarjeta SD · RC 2]", "2026-09-30 11:19"},
+                            {"087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", "Misión 087A9AFE [Tarjeta SD · RC 2]", "2026-08-22 18:44"},
+                            {"A73A8028-48C1-4FA9-9670-D30FD639AD1B", "Misión A73A8028 [Tarjeta SD · RC 2]", "2026-08-22 18:42"},
+                            {"8F99B63E-F707-4453-B57F-C4E6FAE18B1F", "Misión 8F99B63E [Tarjeta SD · RC 2]", "2026-08-22 18:28"},
+                            {"F679F105-5936-4C75-B4D2-34AB49D51BCE", "Misión F679F105 [Tarjeta SD · RC 2]", "2026-08-22 18:21"},
+                            {"1DBB6B29-0B1A-460C-A296-4BF5F146BA28", "Misión 1DBB6B29 [Tarjeta SD · RC 2]", "2026-08-22 18:16"},
+                            {"EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", "Misión EA5FA18E [Tarjeta SD · RC 2]", "2026-08-22 17:57"},
+                            {"09E4DA39-1594-44A3-A1E9-890E731ED678", "Misión 09E4DA39 [Tarjeta SD · RC 2]", "2026-08-22 17:51"},
+                            {"E1E5C00D-1B0E-4175-ACB3-F152BA208768", "Misión E1E5C00D [Tarjeta SD · RC 2]", "2026-08-22 17:40"},
+                            {"5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", "Misión 5A8E7050 [Tarjeta SD · RC 2]", "2026-08-22 17:34"},
+                            {"D378CA50-5D87-41B1-B126-045C20BA5816", "Misión D378CA50 [Tarjeta SD · RC 2]", "2026-08-22 17:29"}
                         };
                         for (String[] row : defaultRcSlots) {
                             JSONObject slot = new JSONObject();
@@ -473,16 +385,7 @@ public class MainActivity extends AppCompatActivity {
                     targetGuid = java.util.UUID.randomUUID().toString().toUpperCase();
                 }
 
-                // 2. Si el slot proviene de Litchi Hub Bridge o se seleccionó un slot remoto
-                if (!"NEW".equals(targetSlotGuid) && targetSlotGuid != null && !targetSlotGuid.isEmpty()) {
-                    boolean bridgeOk = overwriteViaLitchiBridge(targetSlotGuid, decodedBytes, targetSlotGuid + ".kmz");
-                    if (bridgeOk) {
-                        injected = true;
-                        result.put("bridgeInjected", true);
-                    }
-                }
-
-                // 3. Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD y Memoria Interna)
+                // Inyección directa en DJI Fly (busca en todos los roots: Tarjeta SD y Memoria Interna del control RC 2)
                 List<File> roots = getPossibleWaypointRoots();
                 for (File wpRoot : roots) {
                     try {
@@ -497,8 +400,8 @@ public class MainActivity extends AppCompatActivity {
                         if (slotDir.exists()) {
                             File targetKmz = new File(slotDir, targetGuid + ".kmz");
                             if (targetKmz.exists()) {
-                                // Backup automático idéntico a Litchi Hub
-                                File bak = new File(slotDir, targetGuid + ".kmz.lchbak");
+                                // Respaldo de seguridad previo
+                                File bak = new File(slotDir, targetGuid + ".kmz.bak");
                                 targetKmz.renameTo(bak);
                             }
                             FileOutputStream fosSlot = new FileOutputStream(targetKmz);

@@ -1368,7 +1368,7 @@
           </div>
         </div>
 
-        <!-- Finish Action (Litchi WPML) -->
+        <!-- Finish Action (DJI WPML) -->
         <div class="config-group">
           <label class="config-label">Acción al terminar misión</label>
           <select id="cfg-finish-action" class="select-input" onchange="AppState.finishAction=this.value">
@@ -1379,17 +1379,17 @@
           </select>
         </div>
 
-        <!-- Signal Loss Action (Litchi WPML) -->
+        <!-- Signal Loss Action (DJI WPML) -->
         <div class="config-group">
-          <label class="config-label">Al perder señal RC (Litchi)</label>
+          <label class="config-label">Al perder señal RC</label>
           <select id="cfg-lost-action" class="select-input" onchange="AppState.signalLossAction=this.value">
-            <option value="continue" selected>Continuar misión autónoma (como BañoNeza2)</option>
+            <option value="continue" selected>Continuar misión autónoma hasta finalizar</option>
             <option value="goBack">Regresar a Casa (RTH)</option>
             <option value="hover">Quedarse suspendido (Hover)</option>
           </select>
         </div>
 
-        <!-- Turn Mode (Litchi WPML) -->
+        <!-- Turn Mode (DJI WPML) -->
         <div class="config-group">
           <label class="config-label">Modo de giro en curvas (Waypoints)</label>
           <select id="cfg-turn-mode" class="select-input" onchange="AppState.turnMode=this.value">
@@ -1398,11 +1398,11 @@
           </select>
         </div>
 
-        <!-- Heading Mode (Litchi WPML) -->
+        <!-- Heading Mode (DJI WPML) -->
         <div class="config-group">
           <label class="config-label">Orientación del dron (Heading)</label>
           <select id="cfg-heading-mode" class="select-input" onchange="AppState.headingMode=this.value">
-            <option value="smoothTransition" selected>Transición suave al siguiente punto (Litchi)</option>
+            <option value="smoothTransition" selected>Transición suave al siguiente punto (DJI WPML)</option>
             <option value="followWayline">Seguir rumbo de la línea de vuelo</option>
             <option value="manually">Control manual por el piloto</option>
           </select>
@@ -1546,11 +1546,15 @@
         <div class="export-col-card">
           <div class="col-header">
             <span>Slots de DJI Fly</span>
-            <button class="btn-refresh" onclick="refreshDjiSlots()">↻</button>
+            <button class="btn-refresh" title="Refrescar Slots" onclick="refreshDjiSlots(false)">↻</button>
           </div>
 
-          <button class="btn-export-pill" style="margin: 8px 0 10px 0; background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%); color: #fff; justify-content: center; padding: 12px; font-weight: 800; font-size: 0.88rem; box-shadow: var(--shadow-md); width: 100%;" onclick="executeDjiInjection()">
+          <button class="btn-export-pill" style="margin: 8px 0 6px 0; background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%); color: #fff; justify-content: center; padding: 12px; font-weight: 800; font-size: 0.88rem; box-shadow: var(--shadow-md); width: 100%; border: none;" onclick="executeDjiInjection()">
             🚀 Inyectar Misión en DJI Fly
+          </button>
+
+          <button type="button" class="btn-outline-pill" style="margin-bottom: 8px; padding: 6px; font-size: 0.76rem; width: 100%; justify-content: center; border-color: #0284c7; color: #0369a1; background: #f0f9ff; font-weight: 700;" onclick="refreshDjiSlots(true)">
+            🔄 Forzar Lectura en Control RC 2
           </button>
 
           <div id="dji-slots-container" class="modal-slots-list"></div>
@@ -1575,19 +1579,27 @@
     <div class="modal-card">
       <h3 class="modal-title">Enviar a DJI Fly</h3>
       <div class="modal-subtext-blue">
-        Acceso directo a carpeta activo — la misión se copia directamente a la biblioteca de Waypoints de DJI Fly y aparecerá en el Historial del control RC 2.
+        Acceso directo a almacenamiento nativo del DJI RC 2 — la misión se inyecta directamente en la biblioteca de Waypoints de DJI Fly.
       </div>
 
-      <div class="modal-section-title">
-        <span>Slots de DJI Fly</span>
-        <button class="btn-refresh" style="background: none; border: none; cursor: pointer; font-size: 1.1rem;" onclick="refreshDjiSlots()">↻</button>
+      <button class="btn-export-pill" style="margin: 10px 0 8px 0; background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%); color: #fff; justify-content: center; padding: 12px; font-weight: 800; font-size: 0.9rem; box-shadow: var(--shadow-md); width: 100%; border: none;" onclick="executeDjiInjection()">
+        🚀 Inyectar Misión en DJI Fly
+      </button>
+
+      <div class="modal-section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+        <span>Slots de DJI Fly en RC 2</span>
+        <button class="btn-refresh" style="background: none; border: none; cursor: pointer; font-size: 1.1rem;" title="Refrescar Slots" onclick="refreshDjiSlots(false)">↻</button>
       </div>
+
+      <button type="button" class="btn-outline-pill" style="margin-bottom: 8px; padding: 6px; font-size: 0.76rem; width: 100%; justify-content: center; border-color: #0284c7; color: #0369a1; background: #f0f9ff; font-weight: 700;" onclick="refreshDjiSlots(true)">
+        🔄 Forzar Lectura en Control RC 2
+      </button>
 
       <div id="modal-slots-list" class="modal-slots-list"></div>
 
       <div class="modal-actions">
         <button class="modal-btn-close" onclick="closeModal('modal-send-dji')">Cerrar</button>
-        <button class="modal-btn-send" onclick="executeDjiInjection()">Enviar a Slot</button>
+        <button class="modal-btn-send" onclick="executeDjiInjection()">Inyectar en Slot Seleccionado</button>
       </div>
     </div>
   </div>
@@ -1671,7 +1683,7 @@
         <button class="modal-btn-close" style="padding: 2px 6px; font-size: 1rem;" onclick="closeModal('modal-kml-import')">✕</button>
       </div>
       <div class="modal-subtext-blue">
-        Selecciona tu archivo <b>.kml</b> o <b>.kmz</b> generado en Litchi, Google Earth o QGIS. La app cargará el polígono y trazará los waypoints de vuelo automáticamente.
+        Selecciona tu archivo <b>.kml</b> o <b>.kmz</b> generado en Google Earth, QGIS o dronmxE. La app cargará el polígono y trazará los waypoints de vuelo automáticamente.
       </div>
 
       <button type="button" class="modal-btn-send" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.88rem; border-radius: 12px; margin-top: 4px;" onclick="triggerKmlPicker()">
@@ -2825,12 +2837,23 @@
       renderMissionsList();
     }
 
-    function refreshDjiSlots() {
+    function refreshDjiSlots(force = false) {
+      if (force && typeof showToast === 'function') {
+        showToast('Escaneando almacenamiento del control RC 2...', 'info');
+      }
       let slots = [];
-      if (window.AndroidBridge && window.AndroidBridge.getDjiWaypointSlots) {
+      if (window.AndroidBridge) {
         try {
-          const jsonStr = window.AndroidBridge.getDjiWaypointSlots();
-          slots = JSON.parse(jsonStr);
+          let jsonStr = '';
+          if (force && window.AndroidBridge.forceScanDjiWaypointSlots) {
+            jsonStr = window.AndroidBridge.forceScanDjiWaypointSlots();
+          } else if (window.AndroidBridge.getDjiWaypointSlots) {
+            jsonStr = window.AndroidBridge.getDjiWaypointSlots();
+          }
+          if (jsonStr) slots = JSON.parse(jsonStr);
+          if (force && typeof showToast === 'function') {
+            showToast(`Lectura finalizada: ${slots.length} misiones leídas en RC 2`, 'success');
+          }
         } catch (e) {
           slots = [];
         }
@@ -2839,17 +2862,17 @@
       // Si no hay slots de AndroidBridge (ej. navegador o puente en standby), usar los 11 slots del DJI RC 2
       if (!slots || slots.length === 0) {
         slots = [
-          { guid: "DF5F9C06-1155-4737-9376-B36B0DD6E9F8", name: "Slot DF5F9C06", lastModified: "2026-09-30 11:19", source: "sdcard" },
-          { guid: "087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", name: "Slot 087A9AFE", lastModified: "2026-08-22 18:44", source: "sdcard" },
-          { guid: "A73A8028-48C1-4FA9-9670-D30FD639AD1B", name: "Slot A73A8028", lastModified: "2026-08-22 18:42", source: "sdcard" },
-          { guid: "8F99B63E-F707-4453-B57F-C4E6FAE18B1F", name: "Slot 8F99B63E", lastModified: "2026-08-22 18:28", source: "sdcard" },
-          { guid: "F679F105-5936-4C75-B4D2-34AB49D51BCE", name: "Slot F679F105", lastModified: "2026-08-22 18:21", source: "sdcard" },
-          { guid: "1DBB6B29-0B1A-460C-A296-4BF5F146BA28", name: "Slot 1DBB6B29", lastModified: "2026-08-22 18:16", source: "sdcard" },
-          { guid: "EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", name: "Slot EA5FA18E", lastModified: "2026-08-22 17:57", source: "sdcard" },
-          { guid: "09E4DA39-1594-44A3-A1E9-890E731ED678", name: "Slot 09E4DA39", lastModified: "2026-08-22 17:51", source: "sdcard" },
-          { guid: "E1E5C00D-1B0E-4175-ACB3-F152BA208768", name: "Slot E1E5C00D", lastModified: "2026-08-22 17:40", source: "sdcard" },
-          { guid: "5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", name: "Slot 5A8E7050", lastModified: "2026-08-22 17:34", source: "sdcard" },
-          { guid: "D378CA50-5D87-41B1-B126-045C20BA5816", name: "Slot D378CA50", lastModified: "2026-08-22 17:29", source: "sdcard" }
+          { guid: "DF5F9C06-1155-4737-9376-B36B0DD6E9F8", name: "Misión DF5F9C06", lastModified: "2026-09-30 11:19", source: "sdcard" },
+          { guid: "087A9AFE-5FF2-44BA-BA5E-A8F02DD63B8E", name: "Misión 087A9AFE", lastModified: "2026-08-22 18:44", source: "sdcard" },
+          { guid: "A73A8028-48C1-4FA9-9670-D30FD639AD1B", name: "Misión A73A8028", lastModified: "2026-08-22 18:42", source: "sdcard" },
+          { guid: "8F99B63E-F707-4453-B57F-C4E6FAE18B1F", name: "Misión 8F99B63E", lastModified: "2026-08-22 18:28", source: "sdcard" },
+          { guid: "F679F105-5936-4C75-B4D2-34AB49D51BCE", name: "Misión F679F105", lastModified: "2026-08-22 18:21", source: "sdcard" },
+          { guid: "1DBB6B29-0B1A-460C-A296-4BF5F146BA28", name: "Misión 1DBB6B29", lastModified: "2026-08-22 18:16", source: "sdcard" },
+          { guid: "EA5FA18E-BB4C-46CB-BF14-7F867A805CBA", name: "Misión EA5FA18E", lastModified: "2026-08-22 17:57", source: "sdcard" },
+          { guid: "09E4DA39-1594-44A3-A1E9-890E731ED678", name: "Misión 09E4DA39", lastModified: "2026-08-22 17:51", source: "sdcard" },
+          { guid: "E1E5C00D-1B0E-4175-ACB3-F152BA208768", name: "Misión E1E5C00D", lastModified: "2026-08-22 17:40", source: "sdcard" },
+          { guid: "5A8E7050-389A-4E2F-A1C3-52A37B98AC4E", name: "Misión 5A8E7050", lastModified: "2026-08-22 17:34", source: "sdcard" },
+          { guid: "D378CA50-5D87-41B1-B126-045C20BA5816", name: "Misión D378CA50", lastModified: "2026-08-22 17:29", source: "sdcard" }
         ];
       }
 
@@ -2865,9 +2888,9 @@
         if (slots.length === 0) {
           container.innerHTML = `
             <div style="padding: 16px; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; color: #991b1b; font-size: 0.85rem; text-align: center;">
-              <strong>Sin slots detectados en el control</strong><br/>
-              Asegúrate de que el DJI RC 2 esté conectado por USB (Litchi Hub Bridge activo) o que la Tarjeta SD esté insertada.<br/>
-              <button class="btn-refresh" style="margin-top: 8px; padding: 4px 10px; font-size: 0.8rem; background: #fff; border: 1px solid #dc2626; border-radius: 4px; cursor: pointer;" onclick="refreshDjiSlots()">↻ Reintentar Escaneo</button>
+              <strong>Sin misiones detectadas en el almacenamiento</strong><br/>
+              Asegúrate de que la Tarjeta SD esté insertada en el DJI RC 2 o que existan misiones creadas en DJI Fly.<br/>
+              <button class="btn-refresh" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8rem; background: #fff; border: 1px solid #dc2626; border-radius: 6px; cursor: pointer;" onclick="refreshDjiSlots(true)">🔄 Forzar Lectura en Control RC 2</button>
             </div>
           `;
           return;
@@ -2875,21 +2898,20 @@
 
         slots.forEach((s) => {
           const isSelected = (s.guid === AppState.activeSlotGuid);
-          const isSd = s.source === 'sdcard' || s.name.includes('[Tarjeta SD]');
-          const isBridge = s.source === 'litchi_bridge';
-          const badgeColor = isSd ? '#059669' : (isBridge ? '#0284c7' : '#d97706');
-          const badgeBg = isSd ? '#ecfdf5' : (isBridge ? '#e0f2fe' : '#fffbeb');
-          const badgeText = isSd ? 'SD Card' : (isBridge ? 'RC 2 · Litchi Bridge' : 'Interna');
+          const isSd = s.source === 'sdcard' || s.name.includes('[Tarjeta SD');
+          const badgeColor = isSd ? '#059669' : '#2563eb';
+          const badgeBg = isSd ? '#ecfdf5' : '#eff6ff';
+          const badgeText = isSd ? 'Tarjeta SD (RC 2)' : 'Memoria Interna (RC 2)';
 
           const item = document.createElement('div');
           item.className = 'slot-item' + (isSelected ? ' selected' : '');
           item.innerHTML = `
             <div class="slot-item-info" style="flex: 1;">
               <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
-                <h5 style="margin: 0; font-size: 0.95rem; font-weight: 700;">${s.name.replace(/\[.*?\]/g, '').trim()}</h5>
+                <h5 style="margin: 0; font-size: 0.92rem; font-weight: 700;">${s.name.replace(/\[.*?\]/g, '').trim()}</h5>
                 <span style="font-size: 0.68rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}40;">${badgeText}</span>
               </div>
-              <p style="margin: 0; font-size: 0.78rem; color: var(--text-muted);">ID: ${s.guid} ${s.lastModified ? '· ' + s.lastModified : ''}</p>
+              <p style="margin: 0; font-size: 0.74rem; color: var(--text-muted);">ID: ${s.guid} ${s.lastModified ? '· ' + s.lastModified : ''}</p>
             </div>
             <span style="color: var(--primary); font-weight: 800; font-size: 1.1rem;">${isSelected ? '✓' : ''}</span>
           `;
