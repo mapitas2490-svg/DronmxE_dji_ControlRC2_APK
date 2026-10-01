@@ -576,9 +576,70 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public String getDiagnosticLog() {
+            saveLogToDisk();
             synchronized (DIAGNOSTIC_LOG) {
                 return DIAGNOSTIC_LOG.toString();
             }
+        }
+
+        @JavascriptInterface
+        public String saveLogToDisk() {
+            StringBuilder savedPaths = new StringBuilder();
+            try {
+                byte[] logBytes;
+                synchronized (DIAGNOSTIC_LOG) {
+                    logBytes = DIAGNOSTIC_LOG.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                }
+
+                // 1. Descargas público (/sdcard/Download/dronmxE_log.txt)
+                File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (dl != null) {
+                    if (!dl.exists()) dl.mkdirs();
+                    File f = new File(dl, "dronmxE_log.txt");
+                    FileOutputStream fos = new FileOutputStream(f);
+                    fos.write(logBytes);
+                    fos.close();
+                    savedPaths.append("Download/dronmxE_log.txt ");
+                }
+
+                // 2. helpers en memoria interna (/sdcard/helpers/dronmxE_log.txt)
+                File ext = Environment.getExternalStorageDirectory();
+                File helpers = new File(ext, "helpers");
+                if (helpers.exists() || helpers.mkdirs()) {
+                    File f = new File(helpers, "dronmxE_log.txt");
+                    FileOutputStream fos = new FileOutputStream(f);
+                    fos.write(logBytes);
+                    fos.close();
+                    savedPaths.append("helpers/dronmxE_log.txt ");
+                }
+
+                // 3. helpers en MicroSD (volúmenes secundarios ej. /storage/.../helpers/)
+                File[] extDirs = ContextCompat.getExternalFilesDirs(mContext, null);
+                if (extDirs != null) {
+                    for (File d : extDirs) {
+                        if (d != null) {
+                            String p = d.getAbsolutePath();
+                            int idx = p.indexOf("/Android/");
+                            if (idx > 0) {
+                                File sdRoot = new File(p.substring(0, idx));
+                                File sdHelpers = new File(sdRoot, "helpers");
+                                if (sdHelpers.exists() || sdHelpers.mkdirs()) {
+                                    try {
+                                        File f = new File(sdHelpers, "dronmxE_log.txt");
+                                        FileOutputStream fos = new FileOutputStream(f);
+                                        fos.write(logBytes);
+                                        fos.close();
+                                        savedPaths.append(f.getAbsolutePath()).append(" ");
+                                    } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log("SAVE_LOG_ERR", "Error guardando log en disco: " + e.getMessage());
+            }
+            return savedPaths.toString();
         }
 
         @JavascriptInterface

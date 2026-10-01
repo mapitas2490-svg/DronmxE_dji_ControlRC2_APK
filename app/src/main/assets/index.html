@@ -3301,8 +3301,13 @@
 
     function copyDiagnosticLog() {
       let logText = "";
-      if (window.AndroidBridge && window.AndroidBridge.getDiagnosticLog) {
-        logText = window.AndroidBridge.getDiagnosticLog();
+      if (window.AndroidBridge) {
+        if (window.AndroidBridge.getDiagnosticLog) {
+          logText = window.AndroidBridge.getDiagnosticLog();
+        }
+        if (window.AndroidBridge.saveLogToDisk) {
+          window.AndroidBridge.saveLogToDisk();
+        }
       } else {
         const viewer = document.getElementById('diagnostic-log-viewer');
         if (viewer) logText = viewer.textContent;
@@ -3315,9 +3320,9 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(logText).then(() => {
           if (window.AndroidBridge && window.AndroidBridge.showToast) {
-            window.AndroidBridge.showToast("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+            window.AndroidBridge.showToast("📋 ¡Log copiado y guardado como dronmxE_log.txt en el control!");
           } else {
-            alert("📋 ¡Log copiado al portapapeles! Pégalo aquí en el chat.");
+            alert("📋 ¡Log copiado y guardado como dronmxE_log.txt en el control!");
           }
         }).catch(() => fallbackCopy(logText));
       } else {

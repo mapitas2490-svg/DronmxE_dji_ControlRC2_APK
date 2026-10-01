@@ -1,0 +1,72 @@
+﻿================================================================================
+DRONMXE - REGISTRO DE DIAGNÓSTICO Y CONTROL DE CONEXIÓN USB / DJI RC 2
+Fecha: 2026-10-01 09:26:45
+Dispositivo Destino: DJI RC 2 (KATMAI-IDP / Serial: 6UZZN2F0214R8B)
+Ruta en Dispositivo: Este equipo\DJI RC 2\android\helpers\
+================================================================================
+
+[1. MOTIVO DEL ERROR ANTERIOR (¿POR QUÉ NO SE RECONOCÍA?)]
+--------------------------------------------------------------------------------
+1.1. Slots Ficticios de Respaldo (Hardcoded):
+     Tanto en MainActivity.java como en index.html existía una lista estática de 
+     11 misiones ficticias ("DF5F9C06...", "087A9AFE...", etc.) que se mostraban 
+     automáticamente cuando la lectura del disco retornaba 0 resultados. 
+     Esto engañaba a la interfaz mostrando misiones que no correspondían a la 
+     realidad ni al estado de conexión del control.
+     SOLUCIÓN: Se eliminó completamente la lista de respaldo. Al forzar la lectura, 
+     si no hay misiones reales, la pantalla queda 100% limpia en 0 waypoints.
+
+1.2. Discrepancia Modo USB Host vs. Modo Periférico (MTP):
+     - El DJI RC 2 funciona como periférico USB (MTP / adb gadget, VID=0x2CA3, PID=0x1021).
+     - Cuando el APK corre directamente en el RC 2, UsbManager.getDeviceList() 
+       retorna 0 porque el RC 2 no actúa como Host hacia el cable, sino como 
+       dispositivo USB alimentado / conectado.
+     - La detección en el RC 2 se corrigió escuchando:
+       * Intent.ACTION_BATTERY_CHANGED (BatteryManager.BATTERY_PLUGGED_USB)
+       * android.hardware.usb.action.USB_STATE (connected=true, mtp=true)
+       * Intent.ACTION_POWER_CONNECTED / DISCONNECTED
+
+1.3. Restricción de Android 11+ sobre Android/data:
+     - La carpeta de misiones de DJI Fly en el RC 2 se ubica en:
+       /sdcard/Android/data/dji.go.v5/files/waypoint
+     - Android bloquea el acceso directo a carpetas /Android/data/ incluso con 
+       MANAGE_EXTERNAL_STORAGE.
+     - Por esta razón, el puente MTP desde el celular o comandos Shell/Shizuku 
+       son indispensables para leer y sobreescribir los archivos de waypoint.
+
+[2. MODIFICACIONES IMPLEMENTADAS EN EL CÓDIGO]
+--------------------------------------------------------------------------------
+2.1. Botón "Inyectar Misión en DJI Fly":
+     - Removido de todos los menús secundarios y barras laterales.
+     - ÚNICA ubicación activa: Pantalla de Exportar KMZ (export-screen).
+
+2.2. Validación de Conexión Celular ↔ RC 2:
+     - La inyección y lectura forzada solicitan activamente la conexión del cable 
+       USB-C en modo Transferencia de Archivos (MTP).
+
+2.3. Sistema de Diagnóstico en Tiempo Real:
+     - Se integró un panel de diagnóstico con botón "📋 Copiar Log" en la pantalla 
+       de exportación.
+     - Captura modelo del dispositivo, estado del puerto USB, IDs de hardware y 
+       rutas de almacenamiento inspeccionadas.
+
+[3. IDENTIFICADORES DE HARDWARE REGISTRADOS EN WINDOWS]
+--------------------------------------------------------------------------------
+- Dispositivo: DJI RC 2 (KATMAI-IDP)
+- USB VID/PID: VID_2CA3 & PID_1021 (MI_01)
+- Serial ADB: 6UZZN2F0214R8B
+- Almacenamiento MicroSD: "android" (Capacidad ~128 GB)
+- Carpeta Helper de instalación: Este equipo\DJI RC 2\android\helpers\
+
+[4. INSTRUCCIONES DE USO EN CAMPO]
+--------------------------------------------------------------------------------
+1. Instalar la APK dronmxE.apk actualizada que se encuentra en esta misma carpeta.
+2. Si se ejecuta desde el RC 2: Conectar el cable USB-C al celular con MTP activado.
+3. Si se ejecuta desde el Celular: Conectar el cable USB-C al RC 2 y aceptar 
+   el permiso de lectura USB cuando la app lo solicite.
+4. Ir a la pantalla "Exportar KMZ" -> Pulsar "🔄 Forzar Lectura".
+5. Si ocurre cualquier inconveniente, pulsar el botón "📋 Copiar Log" y 
+   compartir el texto generado para depuración instantánea.
+================================================================================
+Compilación exitosa: dronmxE.apk (v1.0.1)
+================================================================================
