@@ -5,50 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>dronmxE - DJI Waypoint Mission Planner</title>
   <link rel="stylesheet" href="leaflet.css" />
-  <script src="leaflet.js">
-function directOverwriteSlot(guid, e) {
-  if (e) e.stopPropagation();
-  selectDeviceSlot(guid);
-  if (!S.connected) {
-    if (window.AndroidBridge && window.AndroidBridge.showToast) {
-      window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
-    } else {
-      alert("⚠️ Conecta el cable OTG al DJI RC 2");
-    }
-    return;
-  }
-  if (!S.selLocalMission) {
-    if (window.AndroidBridge && window.AndroidBridge.showToast) {
-      window.AndroidBridge.showToast("⚠️ Selecciona una misión local primero");
-    } else {
-      alert("⚠️ Selecciona una misión local primero");
-    }
-    return;
-  }
-  injectSelectedLocalToDevice();
-}
-
-function directSyncLocalMission(mName, e) {
-  if (e) e.stopPropagation();
-  const m = S.localMissions.find(x => x.name === mName);
-  if (m) selectLocalMission(m);
-  if (!S.connected) {
-    if (window.AndroidBridge && window.AndroidBridge.showToast) {
-      window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
-    } else {
-      alert("⚠️ Conecta el cable OTG al DJI RC 2");
-    }
-    return;
-  }
-  if (S.selDeviceGuid) {
-    injectSelectedLocalToDevice();
-  } else {
-    createSelectedLocalAsNewDeviceSlot();
-  }
-}
-
-</script>
+  <script src="leaflet.js"></script>
   <script src="jszip.min.js"></script>
+  <script>
+    function directOverwriteSlot(guid, e) {
+      if (e) e.stopPropagation();
+      selectDeviceSlot(guid);
+      if (!S.connected) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
+        } else {
+          alert("⚠️ Conecta el cable OTG al DJI RC 2");
+        }
+        return;
+      }
+      if (!S.selLocalMission) {
+        const curMission = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+        if (curMission) {
+          S.selLocalMission = {
+            name: curMission.name + '.kmz',
+            displayName: curMission.name,
+            wpCount: (curMission.points ? curMission.points.length : 0),
+            size: 0
+          };
+        } else {
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast("⚠️ Selecciona una misión local primero");
+          } else {
+            alert("⚠️ Selecciona una misión local primero");
+          }
+          return;
+        }
+      }
+      injectSelectedLocalToDevice();
+    }
+
+    function directSyncLocalMission(mName, e) {
+      if (e) e.stopPropagation();
+      const m = S.localMissions.find(x => x.name === mName);
+      if (m) selectLocalMission(m);
+      if (!S.connected) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
+        } else {
+          alert("⚠️ Conecta el cable OTG al DJI RC 2");
+        }
+        return;
+      }
+      if (S.selDeviceGuid) {
+        injectSelectedLocalToDevice();
+      } else {
+        createSelectedLocalAsNewDeviceSlot();
+      }
+    }
+  </script>
   <style>
     :root {
       --primary: #1e88e5;
@@ -1905,6 +1915,181 @@ function directSyncLocalMission(mName, e) {
       transform: scale(0.98);
     }
 
+    /* CONTACT / DONATION MODAL (Edgar 🇲🇽 🍻) */
+    #modal-contact-edgar {
+      z-index: 10000 !important;
+    }
+    .modal-contact-card {
+      max-width: 440px !important;
+      border: 1px solid rgba(0, 229, 255, 0.35) !important;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 30px rgba(0, 229, 255, 0.15) !important;
+      background: linear-gradient(165deg, #181c24, #101319) !important;
+      border-radius: 16px !important;
+      padding: 22px !important;
+    }
+    .contact-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .contact-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00e5ff, #0077b6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 4px 14px rgba(0, 229, 255, 0.35);
+      flex-shrink: 0;
+    }
+    .contact-titles {
+      flex: 1;
+    }
+    .contact-main-title {
+      margin: 0;
+      font-size: 16.5px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+    .contact-beer-msg {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fbbf24;
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .contact-subtext {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.45;
+      margin: 0 0 14px 0;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 12px;
+      border-radius: 8px;
+      border-left: 3px solid #00e5ff;
+    }
+    .contact-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      transition: border-color 0.2s;
+    }
+    .contact-item:hover {
+      border-color: rgba(0, 229, 255, 0.3);
+    }
+    .contact-item-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .wa-icon { background: rgba(37, 211, 102, 0.2); color: #25d366; }
+    .bbva-icon { background: rgba(0, 169, 224, 0.2); color: #38bdf8; }
+    .email-icon { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+
+    .contact-item-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .contact-item-label {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .contact-item-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f1f5f9;
+      font-family: monospace, sans-serif;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .contact-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .btn-contact-action {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .btn-wa {
+      background: #25d366;
+      color: #000;
+    }
+    .btn-wa:active { background: #1ebe5d; }
+    .btn-email {
+      background: #f97316;
+      color: #fff;
+    }
+    .btn-email:active { background: #ea580c; }
+    .btn-copy {
+      background: #334155;
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-copy:hover { background: #475569; }
+    .btn-copy.copied {
+      background: #10b981 !important;
+      color: #000 !important;
+      font-weight: 800;
+    }
+
+    /* Button in Control RC 2 MTP top bar */
+    .author-support-badge-btn {
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      color: #00e5ff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 14px;
+      cursor: pointer;
+      margin-left: 8px;
+      vertical-align: middle;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .author-support-badge-btn:hover {
+      background: rgba(0, 229, 255, 0.25);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+    }
+
 </style>
 </head>
 <body>
@@ -1932,8 +2117,8 @@ function directSyncLocalMission(mName, e) {
       <div class="app-header">
         <div class="app-title-row">
           <span class="app-title">dronmxE</span>
-          <a href="mailto:jhonson2490@gmail.com?subject=dronmxE%20Misiones" class="app-author-link" title="Contactar a Edgar" onclick="if(window.AndroidBridge && window.AndroidBridge.openEmail){ window.AndroidBridge.openEmail('jhonson2490@gmail.com'); return false; }">
-            Edgar 🇲🇽
+          <a href="javascript:void(0)" class="app-author-link" title="Contacto y Apoyo a Edgar 🇲🇽" onclick="openContactEdgarModal()">
+            Edgar 🇲🇽 🍻
           </a>
         </div>
       </div>
@@ -2315,6 +2500,8 @@ function directSyncLocalMission(mName, e) {
     </div>
   </div>
 
+
+
   <!-- =========================================================
        JAVASCRIPT LOGIC
        ========================================================= -->
@@ -2334,7 +2521,12 @@ function directSyncLocalMission(mName, e) {
   <div class="sleft">
     <img src="app_logo.png" class="app-logo" alt="dronmxE Logo" onerror="this.src='app_logo.jpg'" />
     <div class="brand-title-wrap">
-      <span class="brand-name">dronmxE <small style="font-size:10px; background:linear-gradient(135deg,#00e5ff,#00b0ff); color:#000; padding:1px 6px; border-radius:10px; font-weight:800; margin-left:4px; vertical-align:middle;">v2.0</small></span>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span class="brand-name">dronmxE <small style="font-size:10px; background:linear-gradient(135deg,#00e5ff,#00b0ff); color:#000; padding:1px 6px; border-radius:10px; font-weight:800; margin-left:4px; vertical-align:middle;">v2.0</small></span>
+        <button class="author-support-badge-btn" onclick="openContactEdgarModal()" title="Contacto / Invitar una cervecita 🍻 a Edgar">
+          Edgar 🇲🇽 🍻
+        </button>
+      </div>
       <div class="status-row">
         <div class="sdot" id="sdot"></div>
         <span class="slabel" id="stxt">Buscando DJI RC 2...</span>
@@ -2408,7 +2600,81 @@ function directSyncLocalMission(mName, e) {
 </div>
 
 
+</div> <!-- END app-view-mtp -->
+
+<!-- =========================================================
+     MODAL 6: CONTACTO Y APOYO A EDGAR 🇲🇽 🍻
+     ========================================================= -->
+<div id="modal-contact-edgar" class="modal-overlay">
+  <div class="modal-card modal-contact-card">
+    <div class="contact-header">
+      <div class="contact-avatar">🇲🇽</div>
+      <div class="contact-titles">
+        <h3 class="contact-main-title">Desarrollado por Edgar 🇲🇽</h3>
+        <div class="contact-beer-msg">¿Me invitas una bebida? 🍻</div>
+      </div>
+    </div>
+    
+    <p class="contact-subtext">
+      ¡Gracias por utilizar <strong>dronmxE</strong>! Si esta herramienta te apoya en tu trabajo fotogramétrico en campo, puedes invitarme una cervecita o un café para seguir manteniendo y mejorando la app.
+    </p>
+
+    <div class="contact-items-list">
+      <!-- WHATSAPP -->
+      <div class="contact-item">
+        <div class="contact-item-icon wa-icon">💬</div>
+        <div class="contact-item-info">
+          <span class="contact-item-label">WhatsApp</span>
+          <span class="contact-item-val">55 7357 5641</span>
+        </div>
+        <div class="contact-item-actions">
+          <button class="btn-contact-action btn-wa" onclick="openWhatsAppContact('5573575641')">
+            Abrir
+          </button>
+          <button class="btn-contact-action btn-copy" onclick="copyContactText('5573575641', this, 'WhatsApp')">
+            📋 Copiar
+          </button>
+        </div>
+      </div>
+
+      <!-- BBVA -->
+      <div class="contact-item">
+        <div class="contact-item-icon bbva-icon">💳</div>
+        <div class="contact-item-info">
+          <span class="contact-item-label">BBVA No. Cuenta CLABE</span>
+          <span class="contact-item-val" style="font-size: 11.5px; letter-spacing: 0.5px;">012 180 01540971898 0</span>
+        </div>
+        <div class="contact-item-actions">
+          <button class="btn-contact-action btn-copy" onclick="copyContactText('012180015409718980', this, 'Cuenta CLABE BBVA')">
+            📋 Copiar CLABE
+          </button>
+        </div>
+      </div>
+
+      <!-- CORREO -->
+      <div class="contact-item">
+        <div class="contact-item-icon email-icon">✉️</div>
+        <div class="contact-item-info">
+          <span class="contact-item-label">Correo Electrónico</span>
+          <span class="contact-item-val" style="font-size: 12px;">jhonson2490@gmail.com</span>
+        </div>
+        <div class="contact-item-actions">
+          <button class="btn-contact-action btn-email" onclick="openEmailContact('jhonson2490@gmail.com')">
+            Escribir
+          </button>
+          <button class="btn-contact-action btn-copy" onclick="copyContactText('jhonson2490@gmail.com', this, 'Correo')">
+            📋 Copiar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="modal-btn-close" style="width:100%;" onclick="closeModal('modal-contact-edgar')">Cerrar</button>
+    </div>
+  </div>
 </div>
+
 <script>
     // State
     const AppState = {
@@ -2576,7 +2842,7 @@ function directSyncLocalMission(mName, e) {
       markersLayer = L.featureGroup().addTo(map);
 
       map.on('click', function(e) {
-        if (AppState.mode === 'Area' || AppState.mode === 'Corridor' || AppState.mode === '3D') {
+        if (AppState.mode === 'Area' || AppState.mode === 'Corridor' || AppState.mode === 'Lineal' || AppState.mode === '3D') {
           addBoundaryPoint(e.latlng);
         } else if (AppState.mode === 'Circle') {
           setupCircleCenter(e.latlng);
@@ -2793,7 +3059,8 @@ function directSyncLocalMission(mName, e) {
 
     function addBoundaryPoint(latlng) {
       const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
-      if (cur && cur.locked !== false) {
+      const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
+      if (cur && cur.locked === true && AppState.points.length >= minPts) {
         if (window.AndroidBridge && window.AndroidBridge.showToast) {
           window.AndroidBridge.showToast('🔒 Misión protegida con candado. Toca el candado [🔒] en la lista para modificar.');
         } else {
@@ -2801,9 +3068,22 @@ function directSyncLocalMission(mName, e) {
         }
         return;
       }
+      if (cur && cur.locked) {
+        cur.locked = false;
+      }
       AppState.points.push(latlng);
       renderBoundary();
       recalculateMission();
+
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
+          if (AppState.points.length === 1) {
+            window.AndroidBridge.showToast('📍 Punto 1 trazado. Toca el siguiente punto para trazar la línea.');
+          } else {
+            window.AndroidBridge.showToast('📍 Línea trazada (' + AppState.points.length + ' puntos).');
+          }
+        }
+      }
 
       // Auto-guardado en tiempo real en la misión activa (sin bloquear con candado)
       if (cur) {
@@ -2864,38 +3144,38 @@ function directSyncLocalMission(mName, e) {
       const pts = AppState.points;
       updatePointBadge();
 
-      if (pts.length < 2) return;
-
       const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
       const isLocked = cur && cur.locked !== false;
 
-      // 1. DIBUJAR POLÍGONO O LÍNEA (interactive: false para que los toques pasen directo a los vértices)
-      if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
-        activeBoundaryShape = L.polyline(pts, {
-          color: '#1e88e5',
-          weight: 4,
-          lineJoin: 'round',
-          interactive: false
-        }).addTo(polygonLayer);
-      } else if (pts.length >= 3) {
-        activeBoundaryShape = L.polygon(pts, {
-          color: '#7c4dff',
-          weight: 3,
-          fillColor: '#7c4dff',
-          fillOpacity: 0.15,
-          lineJoin: 'round',
-          interactive: false
-        }).addTo(polygonLayer);
-      } else {
-        activeBoundaryShape = L.polyline(pts, {
-          color: '#7c4dff',
-          weight: 3,
-          dashArray: '6, 6',
-          interactive: false
-        }).addTo(polygonLayer);
+      // 1. DIBUJAR POLÍGONO O LÍNEA si hay al menos 2 puntos (interactive: false para que los toques pasen directo a los vértices)
+      if (pts.length >= 2) {
+        if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
+          activeBoundaryShape = L.polyline(pts, {
+            color: '#1e88e5',
+            weight: 4,
+            lineJoin: 'round',
+            interactive: false
+          }).addTo(polygonLayer);
+        } else if (pts.length >= 3) {
+          activeBoundaryShape = L.polygon(pts, {
+            color: '#7c4dff',
+            weight: 3,
+            fillColor: '#7c4dff',
+            fillOpacity: 0.15,
+            lineJoin: 'round',
+            interactive: false
+          }).addTo(polygonLayer);
+        } else {
+          activeBoundaryShape = L.polyline(pts, {
+            color: '#7c4dff',
+            weight: 3,
+            dashArray: '6, 6',
+            interactive: false
+          }).addTo(polygonLayer);
+        }
       }
 
-      // 2. VÉRTICES ARRASTRABLES Y EDITABLES
+      // 2. VÉRTICES ARRASTRABLES Y EDITABLES (visibles desde el primer punto)
       pts.forEach((pt, idx) => {
         const marker = L.marker(pt, {
           draggable: !isLocked,
@@ -3403,8 +3683,20 @@ function directSyncLocalMission(mName, e) {
     }
 
     // Modal Helpers
-    function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('active'); }
-    function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('active'); }
+    function openModal(id) { 
+      const el = document.getElementById(id); 
+      if (el) {
+        el.classList.add('active'); 
+        el.style.display = 'flex';
+      }
+    }
+    function closeModal(id) { 
+      const el = document.getElementById(id); 
+      if (el) {
+        el.classList.remove('active'); 
+        el.style.display = 'none';
+      }
+    }
 
     function openSendToDjiFlyModal() {
       openModal('modal-send-dji');
@@ -3726,9 +4018,15 @@ function directSyncLocalMission(mName, e) {
       document.querySelectorAll('.mode-tab').forEach(tab => {
         const text = tab.textContent.trim();
         tab.classList.toggle('active', (AppState.mode === 'Area' && text === 'Área') ||
-                                       (AppState.mode === 'Corridor' && text === 'Corredor') ||
+                                       ((AppState.mode === 'Lineal' || AppState.mode === 'Corridor') && (text === 'Lineal' || text === 'Corredor')) ||
                                        (AppState.mode === '3D' && text === 'Vuelo 3D'));
       });
+
+      const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
+      if (AppState.points.length < minPts) {
+        m.locked = false;
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      }
 
       renderBoundary();
       recalculateMission();
@@ -3863,11 +4161,20 @@ function directSyncLocalMission(mName, e) {
       const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
       const zip = new JSZip();
       const wpmz = zip.folder("wpmz");
+      const safeName = missionName || 'mision_dji';
+
+      let totalDist = 0;
+      for (let i = 0; i < AppState.waylines.length - 1; i++) {
+        const p1 = AppState.waylines[i];
+        const p2 = AppState.waylines[i + 1];
+        totalDist += (window.map ? window.map.distance(L.latLng(p1.lat, p1.lng), L.latLng(p2.lat, p2.lng)) : 10);
+      }
+      const totalSec = Math.max(10, Math.round(totalDist / (AppState.speed || 8)));
 
       const templateKml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:wpml="http://www.dji.com/wpmz/1.0.6">
   <Document>
-    <wpml:author>OpenFlightMission - Edgar</wpml:author>
+    <wpml:author>dronmxE - Edgar</wpml:author>
     <wpml:createTime>${Date.now()}</wpml:createTime>
     <wpml:updateTime>${Date.now()}</wpml:updateTime>
     <wpml:missionConfig>
@@ -3875,12 +4182,19 @@ function directSyncLocalMission(mName, e) {
       <wpml:finishAction>goHome</wpml:finishAction>
       <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
       <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
+      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
         <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
         <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>
       </wpml:droneInfo>
     </wpml:missionConfig>
+    <Folder>
+      <wpml:templateType>waypoint</wpml:templateType>
+      <wpml:templateId>0</wpml:templateId>
+      <wpml:autoFlightSpeed>${AppState.speed}</wpml:autoFlightSpeed>
+      <wpml:missionName><![CDATA[${safeName}]]></wpml:missionName>
+    </Folder>
   </Document>
 </kml>`;
 
@@ -3935,19 +4249,45 @@ function directSyncLocalMission(mName, e) {
       <wpml:finishAction>goHome</wpml:finishAction>
       <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
       <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
+      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
         <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
+        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>
       </wpml:droneInfo>
     </wpml:missionConfig>
     <Folder>
       <wpml:templateId>0</wpml:templateId>
+      <wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>
+      <wpml:waylineId>0</wpml:waylineId>
+      <wpml:distance>${Math.round(totalDist)}</wpml:distance>
+      <wpml:duration>${totalSec}</wpml:duration>
       <wpml:autoFlightSpeed>${AppState.speed}</wpml:autoFlightSpeed>
+      <wpml:missionName><![CDATA[${safeName}]]></wpml:missionName>
       ${placemarks}
     </Folder>
   </Document>
 </kml>`;
 
+      // Paquete Universal: doc.kml para Google Earth y wpmz/ para DJI Fly
+      let docCoords = AppState.waylines.map(w => `${w.lng.toFixed(7)},${w.lat.toFixed(7)},${AppState.altitude}`).join(' ');
+      const docKml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${safeName}</name>
+    <Placemark>
+      <name>Línea de Vuelo - ${safeName}</name>
+      <LineString>
+        <extrude>1</extrude>
+        <tessellate>1</tessellate>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <coordinates>${docCoords}</coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+
+      zip.file("doc.kml", docKml);
       wpmz.file("template.kml", templateKml);
       wpmz.file("waylines.wpml", waylinesWpml);
 
@@ -3955,11 +4295,14 @@ function directSyncLocalMission(mName, e) {
     }
 
     async function saveKmzToDownloads() {
-      const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
+      const curMission = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      const defaultName = curMission ? curMission.name : 'Mision_dji';
+      const fileNameEl = document.getElementById('export-filename');
+      const fileName = (fileNameEl && fileNameEl.value.trim()) ? fileNameEl.value.trim() : defaultName;
       const base64Data = await buildDjiKmzBlob(fileName);
 
       if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
-        window.AndroidBridge.saveKmzMission(base64Data, fileName, "");
+        window.AndroidBridge.saveKmzMission(base64Data, fileName, AppState.activeSlotGuid || "");
       } else {
         const blob = await fetch(`data:application/vnd.google-earth.kmz;base64,${base64Data}`).then(r => r.blob());
         const url = URL.createObjectURL(blob);
@@ -3972,8 +4315,11 @@ function directSyncLocalMission(mName, e) {
     }
 
     async function executeDjiInjection() {
-      const fileName = document.getElementById('export-filename').value.trim() || 'mision_dji';
-      const slot = AppState.activeSlotGuid;
+      const curMission = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      const defaultName = curMission ? curMission.name : 'Mision_dji';
+      const fileNameEl = document.getElementById('export-filename');
+      const fileName = (fileNameEl && fileNameEl.value.trim()) ? fileNameEl.value.trim() : defaultName;
+      const slot = AppState.activeSlotGuid || (curMission ? curMission.slotGuid : "");
       const base64Data = await buildDjiKmzBlob(fileName);
 
       if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
@@ -3981,6 +4327,44 @@ function directSyncLocalMission(mName, e) {
         closeModal('modal-send-dji');
       } else {
         closeModal('modal-send-dji');
+      }
+    }
+
+    // Contact Edgar Modal & Helper Functions
+    function openContactEdgarModal() {
+      openModal('modal-contact-edgar');
+    }
+
+    function copyContactText(text, btnEl, label) {
+      if (window.AndroidBridge && window.AndroidBridge.copyToClipboard) {
+        window.AndroidBridge.copyToClipboard(text, label);
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+      }
+      if (btnEl) {
+        const oldText = btnEl.innerHTML;
+        btnEl.innerHTML = '✓ ¡Copiado!';
+        btnEl.classList.add('copied');
+        setTimeout(() => {
+          btnEl.innerHTML = oldText;
+          btnEl.classList.remove('copied');
+        }, 2000);
+      }
+    }
+
+    function openWhatsAppContact(phone) {
+      if (window.AndroidBridge && window.AndroidBridge.openWhatsApp) {
+        window.AndroidBridge.openWhatsApp(phone, '¡Hola Edgar! Te escribo desde dronmxE 🍻');
+      } else {
+        window.open('https://api.whatsapp.com/send?phone=52' + phone + '&text=' + encodeURIComponent('¡Hola Edgar! Te escribo desde dronmxE 🍻'), '_blank');
+      }
+    }
+
+    function openEmailContact(email) {
+      if (window.AndroidBridge && window.AndroidBridge.openEmail) {
+        window.AndroidBridge.openEmail(email);
+      } else {
+        window.location.href = 'mailto:' + email + '?subject=dronmxE%20Contacto';
       }
     }
 
@@ -4035,7 +4419,12 @@ function directSyncLocalMission(mName, e) {
         }
         // Ensure all have locked property, Air 3S default, and 50MP HIGH resolution
         existing.forEach(m => {
-          if (typeof m.locked === 'undefined') m.locked = true;
+          const mMin = (m.mode === 'Lineal' || m.mode === 'Corridor') ? 2 : 3;
+          if (!m.points || m.points.length < mMin) {
+            m.locked = false;
+          } else if (typeof m.locked === 'undefined') {
+            m.locked = true;
+          }
           m.camera = 'DJI_AIR_3S';
           if (!m.sensorResolution) m.sensorResolution = 'HIGH';
         });

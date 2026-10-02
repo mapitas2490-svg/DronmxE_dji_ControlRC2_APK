@@ -629,19 +629,25 @@ public class MtpHelper {
         return "";
     }
 
+    public boolean isDeviceConnected() {
+        synchronized (mtpLock) {
+            return mtpDevice != null;
+        }
+    }
+
     private boolean injectKmzIntoStorage(MtpDevice device, int storageId, int waypointHandle, String slotGuid, File fileToSend) {
         try {
             int folderHandle = -1;
             String targetFileName = slotGuid.endsWith(".kmz") ? slotGuid : (slotGuid + ".kmz");
 
-            // Buscar carpeta del slot en waypointHandle
+            // Buscar carpeta del slot en waypointHandle (asegurando que sea directorio)
             int[] items = device.getObjectHandles(storageId, 0, waypointHandle);
             if (items != null) {
                 for (int h : items) {
                     MtpObjectInfo info = device.getObjectInfo(h);
                     if (info == null || info.getName() == null) continue;
                     String iname = info.getName();
-                    if (slotGuid.equalsIgnoreCase(iname) || (slotGuid + ".kmz").equalsIgnoreCase(iname)) {
+                    if (slotGuid.equalsIgnoreCase(iname) && (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0)) {
                         folderHandle = h;
                         break;
                     }
@@ -658,27 +664,29 @@ public class MtpHelper {
                 MtpObjectInfo created = device.sendObjectInfo(b.build());
                 if (created != null) {
                     folderHandle = created.getObjectHandle();
+                    callback.onLog("[MTP] Ranura nueva creada en RC 2: " + slotGuid);
                 } else {
+                    callback.onLog("[ERR] No se pudo crear la carpeta del slot " + slotGuid);
                     return false;
                 }
+            } else {
+                callback.onLog("[MTP] Ranura existente localizada en RC 2: " + slotGuid);
             }
 
-            // Limpiar archivos anteriores en la carpeta del slot (KMZ anterior y previews viejas)
+            // Limpiar archivos anteriores en la carpeta del slot (KMZ anterior, previews, backups)
             int[] sub = device.getObjectHandles(storageId, 0, folderHandle);
-            if (sub != null) {
+            if (sub != null && sub.length > 0) {
                 for (int sh : sub) {
                     MtpObjectInfo subObj = device.getObjectInfo(sh);
                     if (subObj != null && subObj.getName() != null) {
                         String sName = subObj.getName().toLowerCase();
-                        if (sName.endsWith(".kmz") || sName.endsWith(".jpg") || sName.endsWith(".png") || sName.endsWith(".tmp")) {
-                            device.deleteObject(sh);
+                        if (sName.endsWith(".kmz") || sName.endsWith(".jpg") || sName.endsWith(".png") || sName.endsWith(".tmp") || sName.endsWith(".bak")) {
+                            boolean del = device.deleteObject(sh);
+                            callback.onLog("[MTP] Limpiando previo " + subObj.getName() + ": " + (del ? "OK" : "omitido"));
                         }
                     }
                 }
             }
-
-            // El nombre del archivo KMZ dentro de la ranura DEBE ser el slotGuid + ".kmz" para que DJI Fly lo indexe
-            targetFileName = slotGuid.endsWith(".kmz") ? slotGuid : (slotGuid + ".kmz");
 
             // Inyectar el nuevo KMZ nativo DJI Fly
             MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
@@ -689,10 +697,37 @@ public class MtpHelper {
             fb.setFormat(MtpConstants.FORMAT_UNDEFINED);
 
             MtpObjectInfo sent = device.sendObjectInfo(fb.build());
-            if (sent == null) return false;
+
+            // Estrategia de recuperación si sendObjectInfo retorna null (archivo todavía bloqueado o en caché)
+            if (sent == null) {
+                callback.onLog("[WARN] sendObjectInfo retornó NULL. Recreando ranura limpia en RC 2...");
+                try {
+                    device.deleteObject(folderHandle);
+                    Thread.sleep(150);
+                } catch (Exception ignored) {}
+
+                MtpObjectInfo.Builder rb = new MtpObjectInfo.Builder();
+                rb.setName(slotGuid);
+                rb.setParent(waypointHandle);
+                rb.setStorageId(storageId);
+                rb.setFormat(MtpConstants.FORMAT_ASSOCIATION);
+                MtpObjectInfo recreated = device.sendObjectInfo(rb.build());
+                if (recreated != null) {
+                    folderHandle = recreated.getObjectHandle();
+                    fb.setParent(folderHandle);
+                    sent = device.sendObjectInfo(fb.build());
+                }
+            }
+
+            if (sent == null) {
+                callback.onLog("[ERR] No se pudo registrar el nuevo KMZ en RC 2.");
+                return false;
+            }
 
             try (ParcelFileDescriptor pfd = ParcelFileDescriptor.open(fileToSend, ParcelFileDescriptor.MODE_READ_ONLY)) {
-                return device.sendObject(sent.getObjectHandle(), (int) fileToSend.length(), pfd);
+                boolean sentOk = device.sendObject(sent.getObjectHandle(), (int) fileToSend.length(), pfd);
+                callback.onLog("[MTP] Transmisión de bytes (" + fileToSend.length() + " B): " + (sentOk ? "✅ ÉXITO" : "❌ FALLÓ"));
+                return sentOk;
             }
         } catch (Exception e) {
             callback.onLog("[ERR] Fallo al inyectar en storage " + storageId + ": " + e.getMessage());
@@ -703,7 +738,7 @@ public class MtpHelper {
     public boolean overwriteMissionKmz(String slotGuid, File localFile) {
         MtpDevice device; synchronized (mtpLock) { device = mtpDevice; }
         if (device == null) {
-            callback.onLog("[ERR] Control RC 2 no conectado por MTP.");
+            callback.onLog("[ERR] Control RC 2 no conectado por MTP. Ejecutando inyección en almacenamiento local...");
             return overwriteLocalWaypointFallback(slotGuid, localFile);
         }
         if (localFile == null || !localFile.exists()) {
@@ -777,29 +812,101 @@ public class MtpHelper {
 
     private boolean overwriteLocalWaypointFallback(String slotGuid, File localFile) {
         try {
-            File fileToSend = WpmlKmzBuilder.ensureDjiWpmlKmz(localFile, context.getCacheDir());
-            File[] candidates = new File[]{
-                    new File("/sdcard/Android/data/dji.go.v5/files/Waypoint"),
-                    new File("/sdcard/Android/data/dji.go.v5/files/waypoint"),
-                    new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE_rc2")
-            };
-            for (File cDir : candidates) {
-                if (cDir.exists() && cDir.isDirectory()) {
-                    File sDir = new File(cDir, slotGuid);
-                    if (!sDir.exists()) sDir.mkdirs();
-                    File dest = new File(sDir, slotGuid + ".kmz");
-                    try (FileInputStream in = new FileInputStream(fileToSend);
-                         FileOutputStream out = new FileOutputStream(dest)) {
-                        byte[] buf = new byte[8192];
-                        int r;
-                        while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+            File fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), slotGuid);
+            List<File> candidates = new ArrayList<>();
+            candidates.add(new File("/storage/emulated/0/Android/data/dji.go.v5/files/waypoint"));
+            candidates.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
+            candidates.add(new File("/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint"));
+            candidates.add(new File("/sdcard/Android/data/dji.go.v5/files/Waypoint"));
+            candidates.add(new File("/storage/emulated/0/.dji.go.v5/waypoint"));
+            candidates.add(new File("/sdcard/.dji.go.v5/waypoint"));
+            candidates.add(new File("/storage/emulated/0/.waypoint"));
+            candidates.add(new File("/sdcard/.waypoint"));
+
+            try {
+                File storage = new File("/storage");
+                if (storage.exists() && storage.isDirectory()) {
+                    File[] mounts = storage.listFiles();
+                    if (mounts != null) {
+                        for (File m : mounts) {
+                            if (m.isDirectory() && !m.getName().equals("emulated") && !m.getName().equals("self")) {
+                                candidates.add(new File(m, "Android/data/dji.go.v5/files/waypoint"));
+                            }
+                        }
                     }
-                    callback.onLog("[OK] Misión copiada en ruta local: " + dest.getAbsolutePath());
-                    return true;
+                }
+            } catch (Exception ignored) {}
+
+            boolean anyWritten = false;
+            for (File cDir : candidates) {
+                try {
+                    if (!cDir.exists()) cDir.mkdirs();
+                    if (cDir.exists() && cDir.isDirectory()) {
+                        File sDir = new File(cDir, slotGuid);
+                        if (!sDir.exists()) sDir.mkdirs();
+                        File dest = new File(sDir, slotGuid + ".kmz");
+
+                        boolean written = false;
+                        try (FileInputStream in = new FileInputStream(fileToSend);
+                             FileOutputStream out = new FileOutputStream(dest)) {
+                            byte[] buf = new byte[8192];
+                            int r;
+                            while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                            written = true;
+                        } catch (Exception ioEx) {
+                            // Shell fallback para evadir restricciones de Android 11 en Android/data
+                            try {
+                                Process p = Runtime.getRuntime().exec(new String[]{
+                                    "sh", "-c", "mkdir -p \"" + sDir.getAbsolutePath() + "\" && cp -f \"" + fileToSend.getAbsolutePath() + "\" \"" + dest.getAbsolutePath() + "\" && chmod 666 \"" + dest.getAbsolutePath() + "\""
+                                });
+                                p.waitFor();
+                                if (dest.exists() && dest.length() > 0) written = true;
+                            } catch (Exception ignored) {}
+                        }
+
+                        if (written) {
+                            File[] oldFiles = sDir.listFiles((d, name) -> name != null && (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bak") || name.endsWith(".tmp")));
+                            if (oldFiles != null) {
+                                for (File of : oldFiles) try { of.delete(); } catch (Exception ignored) {}
+                            }
+                            dest.setLastModified(System.currentTimeMillis());
+                            sDir.setLastModified(System.currentTimeMillis());
+                            anyWritten = true;
+                            callback.onLog("[OK] ✅ Misión sobreescrita en: " + dest.getAbsolutePath());
+                        }
+                    }
+                } catch (Exception e) {
+                    callback.onLog("[WARN] No se pudo escribir en " + cDir.getAbsolutePath() + ": " + e.getMessage());
                 }
             }
-        } catch (Exception ignored) {}
-        return false;
+
+            // Guardar también copia en Downloads/dronmxE_rc2
+            try {
+                File dlRc2 = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE_rc2");
+                if (!dlRc2.exists()) dlRc2.mkdirs();
+                File sDir = new File(dlRc2, slotGuid);
+                if (!sDir.exists()) sDir.mkdirs();
+                File dest = new File(sDir, slotGuid + ".kmz");
+                try (FileInputStream in = new FileInputStream(fileToSend);
+                     FileOutputStream out = new FileOutputStream(dest)) {
+                    byte[] buf = new byte[8192];
+                    int r;
+                    while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                }
+            } catch (Exception ignored) {}
+
+            if (anyWritten) {
+                callback.onLog("[OK] 🎉 Sobreescritura completada en almacenamiento interno del RC 2.");
+                callback.onLog("[DJI FLY] ⚠️ En el RC 2: Cierra DJI Fly en apps recientes (desliza hacia arriba) y ábrelo de nuevo para ver los cambios.");
+                return true;
+            } else {
+                callback.onLog("[ERR] No se pudo escribir en las carpetas de DJI Fly en el RC 2.");
+                return false;
+            }
+        } catch (Exception e) {
+            callback.onLog("[ERR] Excepción en fallback local: " + e.getMessage());
+            return false;
+        }
     }
 
     public boolean deleteDeviceSlot(String slotGuid) {
