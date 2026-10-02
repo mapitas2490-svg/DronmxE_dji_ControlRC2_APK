@@ -1920,12 +1920,14 @@
       z-index: 10000 !important;
     }
     .modal-contact-card {
-      max-width: 440px !important;
+      max-width: 460px !important;
+      max-height: 90vh !important;
+      overflow-y: auto !important;
       border: 1px solid rgba(0, 229, 255, 0.35) !important;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 30px rgba(0, 229, 255, 0.15) !important;
       background: linear-gradient(165deg, #181c24, #101319) !important;
       border-radius: 16px !important;
-      padding: 22px !important;
+      padding: 20px !important;
     }
     .contact-header {
       display: flex;
@@ -2004,6 +2006,7 @@
     }
     .wa-icon { background: rgba(37, 211, 102, 0.2); color: #25d366; }
     .bbva-icon { background: rgba(0, 169, 224, 0.2); color: #38bdf8; }
+    .ada-icon { background: rgba(0, 51, 173, 0.25); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 800; }
     .email-icon { background: rgba(249, 115, 22, 0.2); color: #f97316; }
 
     .contact-item-info {
@@ -2642,11 +2645,25 @@
         <div class="contact-item-icon bbva-icon">💳</div>
         <div class="contact-item-info">
           <span class="contact-item-label">BBVA No. Cuenta CLABE</span>
-          <span class="contact-item-val" style="font-size: 11.5px; letter-spacing: 0.5px;">012 180 01540971898 0</span>
+          <span class="contact-item-val" style="font-size: 12.5px; letter-spacing: 0.5px;">012180015409718980</span>
         </div>
         <div class="contact-item-actions">
           <button class="btn-contact-action btn-copy" onclick="copyContactText('012180015409718980', this, 'Cuenta CLABE BBVA')">
             📋 Copiar CLABE
+          </button>
+        </div>
+      </div>
+
+      <!-- CRIPTOMONEDA CARDANO (ADA) -->
+      <div class="contact-item">
+        <div class="contact-item-icon ada-icon">₳</div>
+        <div class="contact-item-info">
+          <span class="contact-item-label">Criptomoneda Cardano (ADA)</span>
+          <span class="contact-item-val" style="font-size: 10.5px; letter-spacing: 0.2px;" title="addr1q8p3txgsw98zt4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg">addr1q8p3txgsw98zt4hgxag4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg</span>
+        </div>
+        <div class="contact-item-actions">
+          <button class="btn-contact-action btn-copy" onclick="copyContactText('addr1q8p3txgsw98zt4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg', this, 'Dirección Cardano ADA')">
+            📋 Copiar ADA
           </button>
         </div>
       </div>
