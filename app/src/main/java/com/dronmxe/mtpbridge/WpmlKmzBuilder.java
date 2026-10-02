@@ -209,6 +209,62 @@ public class WpmlKmzBuilder {
         }
     }
 
+    /**
+     * Genera un paquete KMZ nativo y puro para DJI Fly (RC 2 / RC Pro).
+     * Contiene estrictamente wpmz/template.kml y wpmz/waylines.wpml (WPML 1.0.6),
+     * sin archivos raíz como doc.kml, garantizando total compatibilidad nativa con
+     * el indexador de misiones C++ de DJI Fly en el control remoto.
+     */
+    public static File buildPureDjiKmz(File inputFile, File outputDir, String missionName) {
+        if (inputFile == null || !inputFile.exists()) return inputFile;
+
+        try {
+            List<Waypoint> waypoints = extractWaypoints(inputFile);
+            if (waypoints.isEmpty()) {
+                logW(TAG, "No se encontraron waypoints para buildPureDjiKmz en " + inputFile.getName());
+                return inputFile;
+            }
+
+            String safeName = (missionName != null && !missionName.trim().isEmpty()) ?
+                    missionName.trim().replace(".kmz", "").replace(".kml", "") :
+                    inputFile.getName().replace(".kmz", "").replace(".kml", "");
+
+            File targetKmz = new File(outputDir, safeName + "_pure_dji.kmz");
+            String templateXml = generateTemplateKml(safeName, waypoints);
+            String waylinesXml = generateWaylinesWpml(safeName, waypoints);
+
+            try (FileOutputStream fos = new FileOutputStream(targetKmz);
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+
+                // Entry 1: wpmz/ (directorio requerido)
+                ZipEntry entryDir = new ZipEntry("wpmz/");
+                zos.putNextEntry(entryDir);
+                zos.closeEntry();
+
+                // Entry 2: wpmz/template.kml
+                ZipEntry entryTemplate = new ZipEntry("wpmz/template.kml");
+                zos.putNextEntry(entryTemplate);
+                zos.write(templateXml.getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+
+                // Entry 3: wpmz/waylines.wpml
+                ZipEntry entryWaylines = new ZipEntry("wpmz/waylines.wpml");
+                zos.putNextEntry(entryWaylines);
+                zos.write(waylinesXml.getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+
+                zos.finish();
+            }
+
+            logD(TAG, "✅ Paquete Pure DJI KMZ generado exitosamente: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
+            return targetKmz;
+
+        } catch (Exception e) {
+            logE(TAG, "Error generando Pure DJI KMZ: " + e.getMessage(), e);
+            return inputFile;
+        }
+    }
+
     private static byte[] readAllBytes(InputStream is) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
@@ -390,9 +446,8 @@ public class WpmlKmzBuilder {
 
     public static String generateTemplateKml(String missionName, List<Waypoint> waypoints) {
         long now = System.currentTimeMillis();
-        String safeName = (missionName != null && !missionName.trim().isEmpty()) ? escapeXml(missionName.trim()) : "Misión dronmxE";
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-               "<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.3\">\n" +
+               "<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.6\">\n" +
                "  <Document>\n" +
                "    <wpml:author>dronmxE - Edgar</wpml:author>\n" +
                "    <wpml:createTime>" + now + "</wpml:createTime>\n" +
@@ -409,16 +464,6 @@ public class WpmlKmzBuilder {
                "        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>\n" +
                "      </wpml:droneInfo>\n" +
                "    </wpml:missionConfig>\n" +
-               "    <Folder>\n" +
-               "      <wpml:templateType>waypoint</wpml:templateType>\n" +
-               "      <wpml:templateId>0</wpml:templateId>\n" +
-               "      <wpml:waylineCoordinateSysParam>\n" +
-               "        <wpml:coordinateMode>WGS84</wpml:coordinateMode>\n" +
-               "        <wpml:heightMode>EGM96</wpml:heightMode>\n" +
-               "      </wpml:waylineCoordinateSysParam>\n" +
-               "      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n" +
-               "      <wpml:missionName><![CDATA[" + safeName + "]]></wpml:missionName>\n" +
-               "    </Folder>\n" +
                "  </Document>\n" +
                "</kml>\n";
     }
@@ -435,7 +480,7 @@ public class WpmlKmzBuilder {
 
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.3\">\n");
+        sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.6\">\n");
         sb.append("  <Document>\n");
         sb.append("    <wpml:missionConfig>\n");
         sb.append("      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>\n");
