@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MtpHelper {
 
@@ -55,7 +56,7 @@ public class MtpHelper {
     private MtpDevice mtpDevice;
 
     private final ExecutorService mtpExecutor = Executors.newSingleThreadExecutor();
-    private volatile boolean isOpening = false;
+    private final AtomicBoolean isConnecting = new AtomicBoolean(false);
     private volatile boolean isScanning = false;
     private volatile String customWaypointPath = "Android/data/dji.go.v5/files/Waypoint";
     private final List<DeviceSlotInfo> cachedSlots = new ArrayList<>();
@@ -164,69 +165,99 @@ public class MtpHelper {
     }
 
     public void findAndConnectDevice() {
-        if (isOpening) return;
-        mtpExecutor.execute(() -> {
-            HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
-            UsbDevice targetDevice = null;
-            for (UsbDevice dev : deviceList.values()) {
-                if (dev.getVendorId() == DJI_VENDOR_ID) {
-                    targetDevice = dev; break;
+        synchronized (mtpLock) {
+            if (mtpDevice != null && currentConnection != null) {
+                try {
+                    int[] sids = mtpDevice.getStorageIds();
+                    if (sids != null && sids.length > 0) {
+                        callback.onDeviceStatus(true, "DJI RC 2 Conectado y Listo");
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    closeConnection();
                 }
             }
-            if (targetDevice == null) {
+        }
+
+        if (!isConnecting.compareAndSet(false, true)) {
+            return;
+        }
+
+        mtpExecutor.execute(() -> {
+            try {
+                HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
+                UsbDevice targetDevice = null;
                 for (UsbDevice dev : deviceList.values()) {
-                    if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE || dev.getDeviceClass() == 0) {
+                    if (dev.getVendorId() == DJI_VENDOR_ID) {
                         targetDevice = dev; break;
                     }
                 }
-            }
-            if (targetDevice == null) {
-                callback.onDeviceStatus(false, "RC 2 no detectado");
-                return;
-            }
-            if (usbManager.hasPermission(targetDevice)) {
-                openMtpDevice(targetDevice);
-            } else {
-                callback.onLog("[USB] Solicitando permiso...");
-                int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0;
-                PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), flags);
-                usbManager.requestPermission(targetDevice, pi);
+                if (targetDevice == null) {
+                    for (UsbDevice dev : deviceList.values()) {
+                        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE || dev.getDeviceClass() == 0) {
+                            targetDevice = dev; break;
+                        }
+                    }
+                }
+                if (targetDevice == null) {
+                    callback.onDeviceStatus(false, "RC 2 no detectado");
+                    return;
+                }
+                if (usbManager.hasPermission(targetDevice)) {
+                    openMtpDevice(targetDevice);
+                } else {
+                    callback.onLog("[USB] Solicitando permiso...");
+                    int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0;
+                    PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), flags);
+                    usbManager.requestPermission(targetDevice, pi);
+                }
+            } finally {
+                isConnecting.set(false);
             }
         });
     }
 
     private void openMtpDevice(UsbDevice device) {
-        if (isOpening) return;
-        isOpening = true;
-        
-        callback.onLog("[MTP] Iniciando sesión...");
+        synchronized (mtpLock) {
+            if (mtpDevice != null && currentConnection != null) {
+                try {
+                    int[] existingIds = mtpDevice.getStorageIds();
+                    if (existingIds != null && existingIds.length > 0) {
+                        callback.onLog("[OK] DJI RC 2 reutilizando sesión MTP activa (" + existingIds.length + " unidades).");
+                        callback.onDeviceStatus(true, "DJI RC 2 Conectado y Listo");
+                        return;
+                    }
+                } catch (Exception ignored) {}
+                closeConnection();
+            }
+        }
+
+        callback.onLog("[MTP] Iniciando sesión con " + (device.getProductName() != null ? device.getProductName() : "RC 2") + "...");
         UsbDeviceConnection connection = usbManager.openDevice(device);
         if (connection == null) {
             callback.onDeviceStatus(false, "Fallo apertura USB");
-            isOpening = false;
             return;
         }
 
         MtpDevice mDevice = new MtpDevice(device);
-        // open() puede tardar 10s en RC 2, se ejecuta fuera de lock para no colgar la UI
         if (!mDevice.open(connection)) {
             callback.onDeviceStatus(false, "MTP Rechazada (¿Desbloqueado?)");
-            connection.close();
-            isOpening = false;
+            try { connection.close(); } catch (Exception ignored) {}
             return;
         }
 
         // Bucle de detección de discos (Storage)
         int[] storageIds = null;
-        for (int i = 0; i < 10; i++) {
-            storageIds = mDevice.getStorageIds();
-            if (storageIds != null && storageIds.length > 0) break;
-            callback.onLog("[MTP] Buscando discos (" + (i+1) + "/10)...");
-            try { Thread.sleep(1000); } catch (Exception ignored) {}
+        for (int i = 0; i < 8; i++) {
+            try {
+                storageIds = mDevice.getStorageIds();
+                if (storageIds != null && storageIds.length > 0) break;
+            } catch (Exception ignored) {}
+            callback.onLog("[MTP] Esperando unidades (" + (i + 1) + "/8)...");
+            try { Thread.sleep(700); } catch (Exception ignored) {}
         }
 
         synchronized (mtpLock) {
-            closeConnection();
             currentDevice = device;
             currentConnection = connection;
             mtpDevice = mDevice;
@@ -234,12 +265,11 @@ public class MtpHelper {
 
         if (storageIds == null || storageIds.length == 0) {
             callback.onDeviceStatus(true, "Conectado (bloqueado)");
-            callback.onLog("[!] RC 2 bloqueado. Elige 'Transferencia de Archivos' en el control.");
+            callback.onLog("[!] RC 2 detectado pero bloqueado. Toca 'Transferencia de Archivos' en la pantalla del control.");
         } else {
             callback.onLog("[OK] DJI RC 2 Conectado con " + storageIds.length + " unidades.");
             callback.onDeviceStatus(true, "DJI RC 2 Conectado y Listo");
         }
-        isOpening = false;
     }
 
     public static class DeviceSlotInfo {
@@ -263,22 +293,44 @@ public class MtpHelper {
         if (device == null) { isScanning = false; return slots; }
 
         try {
-            int[] storageIds = device.getStorageIds();
-            if (storageIds == null || storageIds.length == 0) { isScanning = false; return slots; }
+            int[] storageIds = null;
+            // Si el control estaba bloqueado o recién conectado, reintentar varias veces sin reiniciar el bus
+            for (int attempt = 0; attempt < 3; attempt++) {
+                try {
+                    storageIds = device.getStorageIds();
+                    if (storageIds != null && storageIds.length > 0) break;
+                } catch (Exception ignored) {}
+                if (attempt < 2) {
+                    try { Thread.sleep(500); } catch (Exception ignored) {}
+                }
+            }
+
+            if (storageIds == null || storageIds.length == 0) {
+                callback.onDeviceStatus(true, "Conectado (bloqueado)");
+                callback.onLog("[!] RC 2 no expone unidades. Selecciona 'Transferencia de Archivos' en el control.");
+                isScanning = false;
+                return slots;
+            }
+
+            // Si encontró unidades, actualizar estado a listo
+            callback.onDeviceStatus(true, "DJI RC 2 Conectado y Listo");
 
             Set<String> seen = new HashSet<>();
             for (int storageId : storageIds) {
                 MtpStorageInfo si = device.getStorageInfo(storageId);
-                String storageName = (si != null) ? si.getDescription() : "Memoria";
+                String storageName = (si != null && si.getDescription() != null && !si.getDescription().trim().isEmpty()) ? si.getDescription() : ("Unidad " + storageId);
                 callback.onLog("[MTP] Escaneando unidad: " + storageName);
 
-                // Diagnóstico: listar lo que hay en la raíz de esta unidad con parentHandle = 0xFFFFFFFF
+                // Diagnóstico: listar lo que hay en la raíz de esta unidad
                 int[] rootItems = device.getObjectHandles(storageId, 0, 0xFFFFFFFF);
-                if (rootItems != null) {
+                if (rootItems == null || rootItems.length == 0) {
+                    rootItems = device.getObjectHandles(storageId, 0, 0);
+                }
+                if (rootItems != null && rootItems.length > 0) {
                     StringBuilder sb = new StringBuilder("[MTP] Carpetas raíz: ");
                     for (int rh : rootItems) {
                         MtpObjectInfo ri = device.getObjectInfo(rh);
-                        if (ri != null) sb.append(ri.getName()).append(", ");
+                        if (ri != null && ri.getName() != null) sb.append(ri.getName()).append(", ");
                     }
                     callback.onLog(sb.toString());
                 }

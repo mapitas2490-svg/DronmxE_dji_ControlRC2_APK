@@ -28,6 +28,7 @@
     .status-row{display:flex;align-items:center;gap:6px;margin-top:2px}
     .sdot{width:7px;height:7px;border-radius:50%;background:var(--amber);transition:background .3s,box-shadow .3s}
     .sdot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
+    .sdot.warn{background:#f59e0b;box-shadow:0 0 8px #f59e0b}
     .sdot.err{background:var(--red)}
     .slabel{font-size:10px;font-weight:600;color:var(--muted)}
     .btn-rc{font-size:11px;font-weight:700;background:#22252e;color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;transition:background .15s}
@@ -149,7 +150,7 @@
       </div>
     </div>
   </div>
-  <button class="btn-rc" onclick="refreshAll()">↻ Reconectar</button>
+  <button class="btn-rc" onclick="forceReconnectUsb()">↻ Reconectar</button>
 </div>
 
 <div class="tbar">
@@ -251,10 +252,15 @@ function toggleLog(){ document.getElementById('log-box').classList.toggle('open'
 function onDeviceStatusChanged(connected, description){
   S.connected = connected;
   const dot = document.getElementById('sdot'), txt = document.getElementById('stxt');
-  dot.className = 'sdot ' + (connected ? 'ok' : 'err');
+  const isBlocked = description && description.toLowerCase().indexOf('bloqueado') !== -1;
+  if(isBlocked) {
+    dot.className = 'sdot warn';
+  } else {
+    dot.className = 'sdot ' + (connected ? 'ok' : 'err');
+  }
   txt.textContent = description || (connected ? 'DJI RC 2 Conectado y Listo' : 'Sin cable OTG conectado');
   updateSyncBtn();
-  if(connected) {
+  if(connected && !isBlocked) {
     refreshDeviceSlots();
   } else {
     renderDeviceSlots();
@@ -283,7 +289,20 @@ function renderDeviceSlots(){
   if(td) td.textContent = '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
 
   if(!slots || slots.length === 0){
-    if(!S.connected) {
+    const desc = document.getElementById('stxt') ? document.getElementById('stxt').textContent : '';
+    if(desc.toLowerCase().indexOf('bloqueado') !== -1) {
+      c.innerHTML = '<div class="empty" style="border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); padding:10px 14px; border-radius:10px; text-align:center;">'
+        + '<div style="font-size:14px; margin-bottom:4px; color:#f59e0b; font-weight:800;">⚠️ Control RC 2 Bloqueado</div>'
+        + '<div style="color:var(--txt); font-size:11px; margin-bottom:6px;">Pantalla del RC 2 bloqueada o en modo "Solo Carga".</div>'
+        + '<div style="color:var(--muted); font-size:10px; line-height:1.4; text-align:left; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; margin-bottom:8px;">'
+        + '1. Desbloquea la pantalla del RC 2.<br>'
+        + '2. Desliza la barra superior y pulsa <b>"Carga USB"</b>.<br>'
+        + '3. Elige <b>"Transferencia de archivos"</b> (MTP).<br>'
+        + '4. Pulsa abajo para escanear de nuevo.'
+        + '</div>'
+        + '<button onclick="refreshDeviceSlots()" style="background:linear-gradient(135deg,#f59e0b,#d97706); color:#000; font-weight:800; border:none; padding:7px 16px; border-radius:6px; cursor:pointer; font-size:11px;">🔄 Reintentar Escaneo RC 2</button>'
+        + '</div>';
+    } else if(!S.connected) {
       c.innerHTML = '<div class="empty">🔌 Sin conexión USB-OTG.<br><small style="color:var(--muted)">Conecta el cable USB OTG al teléfono y desbloquea la pantalla del RC 2.</small></div>';
     } else {
       c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Presiona el botón "➕ CREAR NUEVA MISIÓN EN RC 2" para transferir una.</small></div>';
@@ -578,7 +597,17 @@ async function parseKmzWaypoints(b64){
 }
 
 function refreshAll(){
-  if(window.AndroidBridge && window.AndroidBridge.refreshUsb) window.AndroidBridge.refreshUsb();
+  if(!S.connected && window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+    window.AndroidBridge.refreshUsb();
+  }
+  refreshDeviceSlots();
+  refreshLocalMissions();
+}
+
+function forceReconnectUsb(){
+  if(window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+    window.AndroidBridge.refreshUsb();
+  }
   refreshDeviceSlots();
   refreshLocalMissions();
 }
