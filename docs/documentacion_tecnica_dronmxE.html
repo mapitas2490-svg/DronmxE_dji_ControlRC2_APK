@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dronmxE v2.0 · Memoria Técnica y Resolución de Problemas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f17;
+      --bg-card: #131926;
+      --bg-card-sub: #182234;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(0, 229, 255, 0.3);
+      --cyan: #00e5ff;
+      --cyan-glow: rgba(0, 229, 255, 0.18);
+      --blue-ada: #38bdf8;
+      --emerald: #10b981;
+      --amber: #fbbf24;
+      --rose: #f43f5e;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-code: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 80px;
+    }
+
+    /* CONTENEDOR PRINCIPAL */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* TOP BANNER / HEADER */
+    header {
+      background: linear-gradient(180deg, #162032 0%, var(--bg-dark) 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 40px 0 32px 0;
+      margin-bottom: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: 10%;
+      width: 450px;
+      height: 450px;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .badge-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .badge {
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .badge-cyan {
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+    }
+
+    .badge-emerald {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .badge-amber {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--amber);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+
+    .main-title {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -0.8px;
+      color: #ffffff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .main-title .gradient-text {
+      background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 860px;
+      line-height: 1.5;
+    }
+
+    /* NAVEGACIÓN RÁPIDA / TOC */
+    .toc-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 40px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .toc-title {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--cyan);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .toc-link {
+      background: var(--bg-card-sub);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 10px 14px;
+      border-radius: 10px;
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .toc-link:hover {
+      background: rgba(0, 229, 255, 0.1);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      transform: translateY(-2px);
+    }
+
+    /* SECCIONES Y TARJETAS TÉCNICAS */
+    .section-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      color: #ffffff;
+      margin: 48px 0 20px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-left: 4px solid var(--cyan);
+      padding-left: 12px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      transition: border-color 0.2s;
+    }
+
+    .card:hover {
+      border-color: rgba(0, 229, 255, 0.25);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* CALLOUT BOXES (DIAGNÓSTICO Y SOLUCIÓN) */
+    .callout {
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 18px 0;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .callout-problem {
+      background: rgba(244, 63, 94, 0.08);
+      border-left: 4px solid var(--rose);
+      color: #fecdd3;
+    }
+
+    .callout-solution {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 4px solid var(--emerald);
+      color: #a7f3d0;
+    }
+
+    .callout-info {
+      background: rgba(0, 229, 255, 0.08);
+      border-left: 4px solid var(--cyan);
+      color: #cffafe;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .callout-problem strong { color: var(--rose); }
+    .callout-solution strong { color: var(--emerald); }
+    .callout-info strong { color: var(--cyan); }
+
+    /* BLOQUES DE CÓDIGO */
+    .code-block-wrap {
+      margin: 20px 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #0d121c;
+    }
+
+    .code-header {
+      background: #141b29;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .code-filename {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-copy-code {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      border: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-copy-code:hover {
+      background: var(--cyan);
+      color: #000;
+    }
+
+    pre {
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: var(--font-code);
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    /* SYNTAX HIGHLIGHTING SIMPLE */
+    .kw { color: #f43f5e; font-weight: 600; } /* Keyword */
+    .fn { color: #38bdf8; font-weight: 600; } /* Function */
+    .str { color: #a7f3d0; } /* String */
+    .num { color: #fbbf24; } /* Number */
+    .cmt { color: #64748b; font-style: italic; } /* Comment */
+    .cls { color: #e879f9; } /* Class / Object */
+
+    /* TABLAS COMPARATIVAS */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 20px 0;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--bg-card-sub);
+      color: var(--cyan);
+      padding: 14px 18px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      font-size: 11.5px;
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* FOOTER */
+    footer {
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .support-badge-footer {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      padding: 8px 16px;
+      border-radius: 24px;
+      color: var(--cyan);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container">
+      <div class="badge-bar">
+        <span class="badge badge-cyan">dronmxE v2.0</span>
+        <span class="badge badge-emerald">DJI Air 3S / Mini 4 Pro / M3E</span>
+        <span class="badge badge-amber">Memoria Técnica de Desarrollo</span>
+        <span class="badge badge-cyan">Desarrollado por Edgar 🇲🇽</span>
+      </div>
+      <h1 class="main-title">
+        <span class="gradient-text">Arquitectura Técnica y Resolución de Problemas</span>
+      </h1>
+      <p class="subtitle">
+        Documentación exhaustiva sobre las soluciones algorítmicas, arquitectura de sincronización MTP/Local para el control DJI RC 2, flujo fotogramétrico, empaquetado KMZ universal y el módulo de soporte interactivo.
+      </p>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- ÍNDICE INTERACTIVO -->
+    <div class="toc-card">
+      <div class="toc-title">⚡ Índice Rápido de Soluciones Implementadas</div>
+      <div class="toc-grid">
+        <a href="#sol-lineal" class="toc-link"><span>📏</span> 1. Misiones Lineales y Waypoints</a>
+        <a href="#sol-edicion" class="toc-link"><span>✏️</span> 2. Edición Suave de Vértices</a>
+        <a href="#sol-candado" class="toc-link"><span>🔒</span> 3. Lógica del Candado Inteligente</a>
+        <a href="#sol-sensor" class="toc-link"><span>📷</span> 4. Sensor 1" CMOS (50MP vs 12MP)</a>
+        <a href="#sol-rc2" class="toc-link"><span>🎮</span> 5. Sobreescritura en Control RC 2</a>
+        <a href="#sol-kmz" class="toc-link"><span>📦</span> 6. Paquete Universal KMZ + WPML</a>
+        <a href="#sol-modal" class="toc-link"><span>🇲🇽</span> 7. Ventana Edgar, Cardano y CLABE</a>
+        <a href="#sol-bridge" class="toc-link"><span>🌉</span> 8. Android BridgeInterface Nativo</a>
+      </div>
+    </div>
+
+    <!-- 1. MISIONES LINEALES -->
+    <h2 id="sol-lineal" class="section-title">1. Trazado de Misiones Lineales y Generación de Trayectoria</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>📏</span> Cálculo y Dibujo de Vuelos Lineales (Corredor)</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+      
+      <div class="callout callout-problem">
+        <strong>Problema Diagnosticado:</strong>
+        Al seleccionar el modo "Lineal" (o inspección de ejes/caminos), la aplicación no permitía dibujar la línea ni generar los waypoints. El sistema mantenía la regla restrictiva de polígonos cerrados de área, exigiendo un mínimo de 3 vértices antes de registrar la misión o generar la línea de vuelo.
+      </div>
+
+      <div class="callout callout-solution">
+        <strong>Solución Técnica:</strong>
+        Se desacopló la validación según el tipo de vuelo: las misiones lineales requieren un mínimo de <strong>2 puntos</strong> (origen y destino), representándose con un <code>L.polyline</code> en lugar de un <code>L.polygon</code>. Además, se desarrolló el algoritmo de generación lineal que calcula el azimut entre cada segmento y genera disparos equidistantes basados en la velocidad de vuelo y el solape frontal fotogramétrico.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/assets/index.html · Lógica de Dibujo Lineal</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="cmt">// Umbral de puntos según tipo de misión (2 para lineal, 3 para polígono de área)</span>
+<span class="kw">const</span> minPoints = (AppState.mode === <span class="str">'Lineal'</span> || AppState.mode === <span class="str">'Corridor'</span>) ? <span class="num">2</span> : <span class="num">3</span>;
+
+<span class="kw">function</span> <span class="fn">generateLinealFlightWaylines</span>(points, speed, altitude, overlapFront) {
+  <span class="kw">const</span> waylines = [];
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i &lt; points.length - <span class="num">1</span>; i++) {
+    <span class="kw">const</span> p1 = points[i];
+    <span class="kw">const</span> p2 = points[i + <span class="num">1</span>];
+    <span class="kw">const</span> dist = window.map.distance(L.latLng(p1.lat, p1.lng), L.latLng(p2.lat, p2.lng));
+    <span class="kw">const</span> heading = calculateBearing(p1, p2);
+    
+    <span class="cmt">// Subdividir el segmento en waypoints de disparo según solape frontal</span>
+    <span class="kw">const</span> step = calculateTriggerInterval(altitude, overlapFront);
+    <span class="kw">const</span> steps = Math.max(<span class="num">1</span>, Math.round(dist / step));
+    <span class="kw">for</span> (<span class="kw">let</span> s = <span class="num">0</span>; s &lt;= steps; s++) {
+      <span class="kw">const</span> frac = s / steps;
+      waylines.push({
+        lat: p1.lat + (p2.lat - p1.lat) * frac,
+        lng: p1.lng + (p2.lng - p1.lng) * frac,
+        alt: altitude,
+        heading: heading
+      });
+    }
+  }
+  <span class="kw">return</span> waylines;
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 2. EDICIÓN SUAVE DE VÉRTICES -->
+    <h2 id="sol-edicion" class="section-title">2. Edición No Destructiva de Vértices y Puntos Medios</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>✏️</span> Manipulación Fluida de Polígonos y Líneas en el Mapa</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-problem">
+        <strong>Problema Diagnosticado:</strong>
+        Al intentar arrastrar un vértice en el mapa para modificar el polígono de vuelo, los marcadores parpadeaban, se duplicaban o cancelaban el evento de arrastre (`dragend`), provocando saltos involuntarios o reseteos de coordenadas.
+      </div>
+
+      <div class="callout callout-solution">
+        <strong>Solución Técnica:</strong>
+        Se implementó un sistema de marcadores de alta fidelidad con <code>L.circleMarker</code> y <code>L.divIcon</code> reutilizables. Se añadieron <strong>marcadores de punto medio virtuales</strong> con estilo translúcido entre cada par de vértices; al arrastrar un punto medio, este se promueve automáticamente a vértice activo y recalcula inmediatamente el plan de vuelo sin necesidad de recargar la capa del mapa.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/assets/index.html · Edición con Puntos Medios</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="kw">function</span> <span class="fn">renderEditingHandles</span>() {
+  clearHandles();
+  <span class="kw">const</span> pts = AppState.points;
+  <span class="kw">if</span> (!pts || pts.length === <span class="num">0</span>) <span class="kw">return</span>;
+
+  <span class="cmt">// 1. Vértices principales con draggable: true</span>
+  pts.forEach((pt, idx) => {
+    <span class="kw">const</span> m = L.marker([pt.lat, pt.lng], { draggable: <span class="kw">true</span>, icon: vertexIcon }).addTo(editingLayer);
+    m.on(<span class="str">'drag'</span>, (e) => {
+      AppState.points[idx] = { lat: e.latlng.lat, lng: e.latlng.lng };
+      updatePreviewShape();
+    });
+    m.on(<span class="str">'dragend'</span>, () => {
+      recalculateMission();
+      renderEditingHandles();
+    });
+  });
+
+  <span class="cmt">// 2. Marcadores virtuales de punto medio para añadir vértices dinámicos</span>
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i &lt; (AppState.mode === <span class="str">'Area'</span> ? pts.length : pts.length - <span class="num">1</span>); i++) {
+    <span class="kw">const</span> nextIdx = (i + <span class="num">1</span>) % pts.length;
+    <span class="kw">const</span> midLat = (pts[i].lat + pts[nextIdx].lat) / <span class="num">2</span>;
+    <span class="kw">const</span> midLng = (pts[i].lng + pts[nextIdx].lng) / <span class="num">2</span>;
+    <span class="kw">const</span> midM = L.marker([midLat, midLng], { draggable: <span class="kw">true</span>, icon: midPointIcon, opacity: <span class="num">0.6</span> }).addTo(editingLayer);
+    midM.on(<span class="str">'dragstart'</span>, () => {
+      pts.splice(i + <span class="num">1</span>, <span class="num">0</span>, { lat: midLat, lng: midLng });
+    });
+    midM.on(<span class="str">'dragend'</span>, () => {
+      recalculateMission();
+      renderEditingHandles();
+    });
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 3. LÓGICA DEL CANDADO INTELIGENTE -->
+    <h2 id="sol-candado" class="section-title">3. Activación Inteligente del Candado de Protección</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>🔒</span> Bloqueo Únicamente al Regresar a la Vista del Mapa</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-problem">
+        <strong>Problema Diagnosticado:</strong>
+        Al crear una nueva misión de vuelo, la aplicación abría automáticamente el panel de configuración de parámetros, pero a los pocos segundos un temporizador de guardado automático activaba el candado (`locked = true`). Esto bloqueaba la misión e impedía seguir modificando parámetros fotogramétricos o ajustar la geometría.
+      </div>
+
+      <div class="callout callout-solution">
+        <strong>Solución Técnica:</strong>
+        Se desvinculó el estado de bloqueo de los temporizadores internos de guardado. Se fijó la regla de que el candado <strong>sólo se activa en el momento exacto en que el usuario presiona "Volver al Mapa"</strong> (`switchToView('map')`). De este modo, el operador puede configurar altura, velocidad, solape y resolución sin ninguna traba.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/assets/index.html · Regla de Bloqueo al Salir</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="kw">function</span> <span class="fn">switchToView</span>(viewName) {
+  <span class="kw">if</span> (viewName === <span class="str">'map'</span>) {
+    <span class="cmt">// Bloqueo automático inteligente: SOLO se activa al volver al mapa</span>
+    <span class="kw">if</span> (AppState.currentMissionIdx !== <span class="kw">null</span> && AppState.savedMissions[AppState.currentMissionIdx]) {
+      <span class="kw">const</span> curM = AppState.savedMissions[AppState.currentMissionIdx];
+      <span class="kw">const</span> mMin = (curM.mode === <span class="str">'Lineal'</span> || curM.mode === <span class="str">'Corridor'</span>) ? <span class="num">2</span> : <span class="num">3</span>;
+      <span class="kw">if</span> (curM.points && curM.points.length >= mMin) {
+        curM.locked = <span class="kw">true</span>; <span class="cmt">// Proteger contra toques accidentales en el mapa</span>
+      }
+    }
+  }
+  document.querySelectorAll(<span class="str">'.view-panel'</span>).forEach(p => p.classList.remove(<span class="str">'active'</span>));
+  document.getElementById(<span class="str">`view-${viewName}`</span>).classList.add(<span class="str">'active'</span>);
+  renderMissionList();
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 4. SENSOR 1" CMOS 50MP vs 12MP -->
+    <h2 id="sol-sensor" class="section-title">4. Soporte Óptico Sensor CMOS 1" (50 MP vs 12 MP Binning)</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>📷</span> Selector Dinámico de Resolución y Modelado de Cámara Air 3S</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Requerimiento:</strong>
+        El DJI Air 3S cuenta con un sensor de 1 pulgada capaz de operar en modo nativo de 50 MP (8192 × 5464 px) para máximo detalle milimétrico (GSD), o en modo Pixel Binning 4-en-1 de 12 MP (4096 × 2732 px) para mayor velocidad de disparo y vuelos a menor intervalo.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/assets/index.html · Especificaciones Ópticas</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="kw">const</span> CameraSpecs = {
+  DJI_AIR_3S: { 
+    name: <span class="str">'DJI Air 3S'</span>, 
+    sensorW: <span class="num">13.2</span>, 
+    sensorH: <span class="num">8.8</span>, 
+    focal: <span class="num">8.4</span>, 
+    droneId: <span class="num">90</span>, <span class="cmt">// Enum oficial DJI WPML</span>
+    resolutions: {
+      HIGH: { 
+        label: <span class="str">'50 MP (Alta Res)'</span>, 
+        detail: <span class="str">'Sensor 1" CMOS: 8192 × 5464 px · Máximo detalle GSD'</span>, 
+        imgW: <span class="num">8192</span>, 
+        imgH: <span class="num">5464</span> 
+      },
+      BINNING: { 
+        label: <span class="str">'12 MP (Binning)'</span>, 
+        detail: <span class="str">'Sensor 1" CMOS (Binning 4-en-1): 4096 × 2732 px · Captura rápida'</span>, 
+        imgW: <span class="num">4096</span>, 
+        imgH: <span class="num">2732</span> 
+      }
+    }
+  }
+};</code></pre>
+      </div>
+    </div>
+
+    <!-- 5. SOBREESCRITURA EN CONTROL RC 2 -->
+    <h2 id="sol-rc2" class="section-title">5. Sobreescritura Forzada e Inyección en DJI RC 2 (MTP y Memoria)</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>🎮</span> Inyección Segura en Ranuras de Waypoints de DJI Fly</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-problem">
+        <strong>Problema Diagnosticado:</strong>
+        Al intentar sobreescribir una misión en el control RC 2 desde la pestaña "Control RC 2 (MTP)", el proceso no finalizaba o el archivo no se reemplazaba debido a dos motivos:
+        1. Las funciones JS de sincronización estaban atrapadas dentro de un script de Leaflet no globalizado.
+        2. La coincidencia del nombre del archivo fallaba cuando el usuario omitía o incluía la extensión `.kmz`.
+      </div>
+
+      <div class="callout callout-solution">
+        <strong>Solución Técnica:</strong>
+        Se independizó el bloque de scripts MTP y se construyó en Java el método <code>resolveTargetKmzFile()</code> con algoritmo de búsqueda de triple capa (ruta absoluta directa, coincidencia con/sin extensión `.kmz`, y escaneo recursivo en <code>/Download/dronmxE</code>, <code>/Documents</code> y caché). Adicionalmente, se ejecuta escritura directa en las rutas de waypoint de DJI Fly con comandos de respaldo Linux <code>cp -f</code> y <code>chmod 666</code> para garantizar que DJI Fly cargue la misión actualizada al instante.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/java/com/dronmxe/mtpbridge/MainActivity.java · Resolución de Archivo</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="kw">private</span> File <span class="fn">resolveTargetKmzFile</span>(String localFileNameOrPath) {
+    <span class="kw">if</span> (localFileNameOrPath == <span class="kw">null</span> || localFileNameOrPath.trim().isEmpty()) <span class="kw">return</span> <span class="kw">null</span>;
+    String clean = localFileNameOrPath.trim();
+
+    <span class="cmt">// 1. Comprobación directa de ruta en disco</span>
+    File direct = <span class="kw">new</span> File(clean);
+    <span class="kw">if</span> (direct.exists() && direct.isFile()) <span class="kw">return</span> direct;
+
+    <span class="kw">if</span> (!clean.endsWith(<span class="str">".kmz"</span>) && !clean.endsWith(<span class="str">".kml"</span>)) {
+        File directKmz = <span class="kw">new</span> File(clean + <span class="str">".kmz"</span>);
+        <span class="kw">if</span> (directKmz.exists() && directKmz.isFile()) <span class="kw">return</span> directKmz;
+    }
+
+    <span class="cmt">// 2. Búsqueda en lista de misiones escaneadas</span>
+    <span class="kw">synchronized</span> (availableKmzFiles) {
+        <span class="kw">for</span> (File f : availableKmzFiles) {
+            <span class="kw">if</span> (f.getAbsolutePath().equalsIgnoreCase(clean) || 
+                f.getName().equalsIgnoreCase(clean) || 
+                f.getName().equalsIgnoreCase(clean + <span class="str">".kmz"</span>)) {
+                <span class="kw">return</span> f;
+            }
+        }
+    }
+
+    <span class="cmt">// 3. Fallback exhaustivo en directorios públicos y carpetas DJI</span>
+    File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+    String nameWithKmz = clean.endsWith(<span class="str">".kmz"</span>) ? clean : (clean + <span class="str">".kmz"</span>);
+    File[] candidates = <span class="kw">new</span> File[]{
+        <span class="kw">new</span> File(dl, clean),
+        <span class="kw">new</span> File(dl, nameWithKmz),
+        <span class="kw">new</span> File(<span class="kw">new</span> File(dl, <span class="str">"dronmxE"</span>), nameWithKmz),
+        <span class="kw">new</span> File(<span class="str">"/sdcard/Download/"</span> + nameWithKmz)
+    };
+    <span class="kw">for</span> (File c : candidates) {
+        <span class="kw">if</span> (c.exists() && c.isFile()) <span class="kw">return</span> c;
+    }
+    <span class="kw">return</span> <span class="kw">null</span>;
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- 6. PAQUETE KMZ UNIVERSAL -->
+    <h2 id="sol-kmz" class="section-title">6. Estructura de Empaquetado KMZ Universal (Google Earth + DJI WPML)</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>📦</span> Doble Compatibilidad en un Mismo Archivo KMZ</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Arquitectura del Contenedor KMZ:</strong>
+        Un archivo KMZ convencional sólo incluye <code>doc.kml</code> para visores geográficos, mientras que un archivo DJI WPML sólo incluye la subcarpeta <code>wpmz/</code>. <strong>dronmxE genera un archivo híbrido universal</strong> que contiene ambos formatos simultáneamente:
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ruta Interna en el Archivo .KMZ</th>
+              <th>Propósito</th>
+              <th>Consumidor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/doc.kml</code></td>
+              <td>Representación 3D del polígono y líneas con altitud relativa al suelo</td>
+              <td>Google Earth, ArcGIS Pro, QGIS, Global Mapper</td>
+            </tr>
+            <tr>
+              <td><code>/wpmz/template.kml</code></td>
+              <td>Definición del tipo de plantilla, dron (Air 3S = 90) y velocidad global</td>
+              <td>DJI Fly App / DJI Pilot 2</td>
+            </tr>
+            <tr>
+              <td><code>/wpmz/waylines.wpml</code></td>
+              <td>Waypoints exactos, acciones de disparo fotográfico, ángulos de gimbal pitch y headings</td>
+              <td>Piloto Automático DJI RC 2</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 7. VENTANA DE EDGAR, CARDANO Y CLABE -->
+    <h2 id="sol-modal" class="section-title">7. Ventana de Apoyo a Edgar (Modal), Cardano ADA y CLABE BBVA</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>🇲🇽</span> Módulo Interactivo de Contacto y Apoyo al Desarrollador</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-problem">
+        <strong>Problema Diagnosticado:</strong>
+        El modal de contacto a Edgar estaba anidado dentro del contenedor del planificador de vuelos (`#app-view-planner`). Cuando el usuario pasaba a la sección de control RC 2 (`#app-view-mtp`), el modal quedaba oculto detrás de la jerarquía DOM. Además, la cuenta CLABE tenía espacios intermedios y no se disponía del botón para donaciones en criptomoneda Cardano.
+      </div>
+
+      <div class="callout callout-solution">
+        <strong>Solución Técnica:</strong>
+        1. Se desacopló el modal <code>#modal-contact-edgar</code> colocándolo como <strong>hijo directo de <code>&lt;body&gt;</code></strong> con <code>z-index: 10000 !important;</code>, haciéndolo accesible tanto desde el mapa como desde el módulo MTP.<br>
+        2. Se formateó la CLABE BBVA a 18 dígitos continuos: <strong><code>012180015409718980</code></strong>.<br>
+        3. Se añadió la tarjeta de <strong>Criptomoneda Cardano (ADA)</strong> con la dirección completa <code>addr1q8p3txgsw98zt4hgxag4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg</code> y el botón <code>📋 Copiar ADA</code> con retroalimentación visual inmediata.
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/assets/index.html · Estructura de Tarjetas del Modal</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code><span class="cmt">&lt;!-- CLABE BBVA CONTINUA SIN ESPACIOS --&gt;</span>
+&lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item"</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-icon bbva-icon"</span>&gt;💳&lt;/<span class="kw">div</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-info"</span>&gt;
+    &lt;<span class="kw">span</span> <span class="cls">class</span>=<span class="str">"contact-item-label"</span>&gt;BBVA No. Cuenta CLABE&lt;/<span class="kw">span</span>&gt;
+    &lt;<span class="kw">span</span> <span class="cls">class</span>=<span class="str">"contact-item-val"</span> <span class="cls">style</span>=<span class="str">"font-size: 12.5px; letter-spacing: 0.5px;"</span>&gt;012180015409718980&lt;/<span class="kw">span</span>&gt;
+  &lt;/<span class="kw">div</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-actions"</span>&gt;
+    &lt;<span class="kw">button</span> <span class="cls">class</span>=<span class="str">"btn-contact-action btn-copy"</span> <span class="cls">onclick</span>=<span class="str">"copyContactText('012180015409718980', this, 'Cuenta CLABE BBVA')"</span>&gt;
+      📋 Copiar CLABE
+    &lt;/<span class="kw">button</span>&gt;
+  &lt;/<span class="kw">div</span>&gt;
+&lt;/<span class="kw">div</span>&gt;
+
+<span class="cmt">&lt;!-- CRIPTOMONEDA CARDANO (ADA) --&gt;</span>
+&lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item"</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-icon ada-icon"</span>&gt;₳&lt;/<span class="kw">div</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-info"</span>&gt;
+    &lt;<span class="kw">span</span> <span class="cls">class</span>=<span class="str">"contact-item-label"</span>&gt;Criptomoneda Cardano (ADA)&lt;/<span class="kw">span</span>&gt;
+    &lt;<span class="kw">span</span> <span class="cls">class</span>=<span class="str">"contact-item-val"</span> <span class="cls">style</span>=<span class="str">"font-size: 10.5px;"</span>&gt;addr1q8p3txgsw98zt4hgxag4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg&lt;/<span class="kw">span</span>&gt;
+  &lt;/<span class="kw">div</span>&gt;
+  &lt;<span class="kw">div</span> <span class="cls">class</span>=<span class="str">"contact-item-actions"</span>&gt;
+    &lt;<span class="kw">button</span> <span class="cls">class</span>=<span class="str">"btn-contact-action btn-copy"</span> <span class="cls">onclick</span>=<span class="str">"copyContactText('addr1q8p3txgsw98zt4hgxag4hq4pdwnrt5ly7av3aeeecagvt04sve5ted8m0wl99677rdgqrdhslk0g2l7skx2nrklpgdeq6tl7sg', this, 'Dirección Cardano ADA')"</span>&gt;
+      📋 Copiar ADA
+    &lt;/<span class="kw">button</span>&gt;
+  &lt;/<span class="kw">div</span>&gt;
+&lt;/<span class="kw">div</span>&gt;</code></pre>
+      </div>
+    </div>
+
+    <!-- 8. PUENTE NATIVO ANDROID -->
+    <h2 id="sol-bridge" class="section-title">8. Puente Nativo Android (Java BridgeInterface)</h2>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>🌉</span> Integración Nativa de Portapapeles, WhatsApp y Hápticos</div>
+        <span class="badge badge-emerald">Resuelto</span>
+      </div>
+
+      <div class="callout callout-info">
+        <strong>Comunicación Bidireccional Segura:</strong>
+        Para evitar restricciones de seguridad de los WebViews de Android al acceder a <code>navigator.clipboard</code> o al intentar abrir enlaces externos <code>mailto:</code> o <code>whatsapp://</code>, se implementaron métodos nativos en <code>BridgeInterface</code>:
+      </div>
+
+      <div class="code-block-wrap">
+        <div class="code-header">
+          <span class="code-filename">app/src/main/java/com/dronmxe/mtpbridge/MainActivity.java · Métodos Bridge</span>
+          <button class="btn-copy-code" onclick="copyCode(this)">Copiar</button>
+        </div>
+        <pre><code>@JavascriptInterface
+<span class="kw">public void</span> <span class="fn">copyToClipboard</span>(String text, String label) {
+    runOnUiThread(() -> {
+        <span class="kw">try</span> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = ClipData.newPlainText(label != <span class="kw">null</span> ? label : <span class="str">"dronmxE"</span>, text);
+            <span class="kw">if</span> (clipboard != <span class="kw">null</span>) {
+                clipboard.setPrimaryClip(clip);
+                triggerHaptic();
+                showToast(<span class="str">"📋 "</span> + (label != <span class="kw">null</span> ? label : <span class="str">"Dato"</span>) + <span class="str">" copiado al portapapeles"</span>);
+            }
+        } <span class="kw">catch</span> (Exception e) {
+            showToast(<span class="str">"Error al copiar: "</span> + e.getMessage());
+        }
+    });
+}
+
+@JavascriptInterface
+<span class="kw">public void</span> <span class="fn">openWhatsApp</span>(String phone, String message) {
+    runOnUiThread(() -> {
+        <span class="kw">try</span> {
+            String clean = phone.replaceAll(<span class="str">"[^0-9]"</span>, <span class="str">""</span>);
+            <span class="kw">if</span> (clean.length() == <span class="num">10</span>) clean = <span class="str">"52"</span> + clean;
+            String url = <span class="str">"https://api.whatsapp.com/send?phone="</span> + clean + <span class="str">"&text="</span> + Uri.encode(message);
+            Intent intent = <span class="kw">new</span> Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } <span class="kw">catch</span> (Exception e) {
+            showToast(<span class="str">"No se pudo abrir WhatsApp: "</span> + e.getMessage());
+        }
+    });
+}</code></pre>
+      </div>
+    </div>
+
+    <!-- RESUMEN DE UBICACIONES -->
+    <h2 class="section-title">9. Ubicación de Archivos Clave del Proyecto</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Componente</th>
+            <th>Ruta en el Repositorio</th>
+            <th>Función Principal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Interfaz y Lógica Fotogramétrica</strong></td>
+            <td><code>app/src/main/assets/index.html</code></td>
+            <td>Planificador Leaflet, cálculo de waylines, modal de Edgar, exportación Base64 KMZ</td>
+          </tr>
+          <tr>
+            <td><strong>Actividad Principal y Puente Nativo</strong></td>
+            <td><code>app/src/main/java/com/dronmxe/mtpbridge/MainActivity.java</code></td>
+            <td><code>BridgeInterface</code>, portapapeles, resolución de archivos KMZ, intents externos</td>
+          </tr>
+          <tr>
+            <td><strong>Driver MTP para DJI RC 2</strong></td>
+            <td><code>app/src/main/java/com/dronmxe/mtpbridge/MtpHelper.java</code></td>
+            <td>Lectura y escritura MTP vía USB directo al almacenamiento del control RC 2</td>
+          </tr>
+          <tr>
+            <td><strong>Constructor KMZ Universal</strong></td>
+            <td><code>app/src/main/java/com/dronmxe/mtpbridge/WpmlKmzBuilder.java</code></td>
+            <td>Generación dual de <code>doc.kml</code> y carpeta <code>wpmz/</code> (WPML)</td>
+          </tr>
+          <tr>
+            <td><strong>APK Compilado Final</strong></td>
+            <td><code>F:\DJI_3S_AIR\apk\dronmxE.apk</code></td>
+            <td>Paquete binario para instalación directa en dispositivos Android y DJI RC 2</td>
+          </tr>
+          <tr>
+            <td><strong>Esta Documentación Técnica</strong></td>
+            <td><code>docs/documentacion_tecnica_dronmxE.html</code></td>
+            <td>Memoria técnica completa en HTML autónomo</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="support-badge-footer">
+        <span>🇲🇽</span> Desarrollado por Edgar · dronmxE v2.0
+      </div>
+      <p>Documento generado para referencia técnica, auditoría y mantenimiento continuo de la aplicación.</p>
+    </footer>
+
+  </div>
+
+  <script>
+    function copyCode(btn) {
+      const codeBlock = btn.closest('.code-block-wrap').querySelector('pre code');
+      if (codeBlock) {
+        navigator.clipboard.writeText(codeBlock.innerText).then(() => {
+          const old = btn.innerText;
+          btn.innerText = '✓ ¡Copiado!';
+          btn.style.background = '#10b981';
+          btn.style.color = '#000';
+          setTimeout(() => {
+            btn.innerText = old;
+            btn.style.background = '';
+            btn.style.color = '';
+          }, 2000);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
