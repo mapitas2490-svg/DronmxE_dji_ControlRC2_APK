@@ -610,9 +610,10 @@ public class MtpHelper {
             return false;
         }
 
+        File fileToSend = null;
         try {
             callback.onLog("[MTP] Empaquetando KMZ DJI Fly nativo (WPML 1.0.6) para: " + localFile.getName());
-            File fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), slotGuid);
+            fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), slotGuid);
 
             int[] storageIds = device.getStorageIds();
             if (storageIds == null || storageIds.length == 0) {
@@ -665,6 +666,10 @@ public class MtpHelper {
         } catch (Exception e) {
             callback.onLog("[ERR] Excepción en sobreescritura MTP: " + e.getMessage());
             return false;
+        } finally {
+            if (fileToSend != null && fileToSend.exists() && fileToSend.getAbsolutePath().contains(context.getCacheDir().getAbsolutePath())) {
+                try { fileToSend.delete(); } catch (Exception ignored) {}
+            }
         }
     }
 

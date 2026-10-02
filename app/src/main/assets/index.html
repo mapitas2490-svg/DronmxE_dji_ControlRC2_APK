@@ -378,14 +378,19 @@ function renderLocalMissions(){
     return;
   }
 
-  if(!S.selLocalMission || !missions.some(m => m.name === S.selLocalMission.name)){
+  if(S.selLocalMission){
+    var found = missions.find(m => (m.path && S.selLocalMission.path && m.path === S.selLocalMission.path) || (m.name === S.selLocalMission.name && m.size === S.selLocalMission.size));
+    if(found) S.selLocalMission = found;
+    else S.selLocalMission = missions[0];
+  } else {
     S.selLocalMission = missions[0];
   }
-  document.getElementById('src-name').textContent = S.selLocalMission.name;
+  var selWp = (S.selLocalMission && S.selLocalMission.wpCount) ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
+  document.getElementById('src-name').textContent = S.selLocalMission ? (S.selLocalMission.name + selWp) : 'Ninguna';
 
   c.innerHTML = '';
   missions.forEach(function(m, idx){
-    const isSel = S.selLocalMission && S.selLocalMission.name === m.name;
+    const isSel = S.selLocalMission && ((S.selLocalMission.path && m.path && S.selLocalMission.path === m.path) || S.selLocalMission.name === m.name);
     const row = document.createElement('div');
     row.className = 'mrow' + (isSel ? ' sel' : '');
     row.onclick = function(){ selectLocalMission(m); };
@@ -417,7 +422,9 @@ function renderLocalMissions(){
 
 function selectLocalMission(m){
   S.selLocalMission = m;
-  document.getElementById('src-name').textContent = m.name;
+  var selWp = m.wpCount ? (' (' + m.wpCount + ' WP)') : '';
+  document.getElementById('src-name').textContent = m.name + selWp;
+  appendLog('[APP] Misión origen seleccionada: ' + m.name + selWp);
   renderLocalMissions();
 }
 
@@ -685,14 +692,16 @@ function injectSelectedLocalToDevice(){
 
   var slotObj = S.deviceSlots.find(s => s.guid === guid);
   var targetName = slotObj ? ((slotObj.displayName && slotObj.displayName !== slotObj.guid) ? slotObj.displayName : shortGuid(guid)) : shortGuid(guid);
+  var selWp = S.selLocalMission.wpCount ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
 
-  if(!confirm('¿Sobreescribir la misión "' + targetName + '" en RC 2 con "' + S.selLocalMission.name + '"?')) return;
+  if(!confirm('¿Sobreescribir la misión "' + targetName + '" en RC 2 con "' + S.selLocalMission.name + selWp + '"?')) return;
 
-  appendLog('[MTP] Sobreescribiendo ' + S.selLocalMission.name + ' hacia ' + targetName + '...');
+  appendLog('[MTP] Sobreescribiendo ' + S.selLocalMission.name + selWp + ' hacia ' + targetName + '...');
   var syncBtn = document.getElementById('btn-sync');
   if(syncBtn){ syncBtn.disabled = true; syncBtn.textContent = '⏳ INYECTANDO EN RC 2...'; }
   if(window.AndroidBridge && window.AndroidBridge.overwriteSlotFromLocal){
-    var ok = window.AndroidBridge.overwriteSlotFromLocal(guid, S.selLocalMission.name);
+    var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
+    var ok = window.AndroidBridge.overwriteSlotFromLocal(guid, targetFileParam);
     setTimeout(function(){
       if(syncBtn){ syncBtn.textContent = '⚡ SOBREESCRIBIR EN RC 2'; }
       refreshDeviceSlots();
@@ -703,13 +712,15 @@ function injectSelectedLocalToDevice(){
 function createSelectedLocalAsNewDeviceSlot(){
   if(!S.selLocalMission){ alert('Selecciona una misión local primero.'); return; }
 
-  if(!confirm('¿Crear una NUEVA misión en DJI Fly (RC 2) basada en "' + S.selLocalMission.name + '"?')) return;
+  var selWp = S.selLocalMission.wpCount ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
+  if(!confirm('¿Crear una NUEVA misión en DJI Fly (RC 2) basada en "' + S.selLocalMission.name + selWp + '"?')) return;
 
-  appendLog('[MTP] Creando nueva misión en RC 2 desde ' + S.selLocalMission.name + '...');
+  appendLog('[MTP] Creando nueva misión en RC 2 desde ' + S.selLocalMission.name + selWp + '...');
   var newBtn = document.getElementById('btn-new');
   if(newBtn){ newBtn.disabled = true; newBtn.textContent = '⏳ CREANDO EN RC 2...'; }
   if(window.AndroidBridge && window.AndroidBridge.createNewSlotFromLocal){
-    var ok = window.AndroidBridge.createNewSlotFromLocal(S.selLocalMission.name);
+    var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
+    var ok = window.AndroidBridge.createNewSlotFromLocal(targetFileParam);
     setTimeout(function(){
       if(newBtn){ newBtn.textContent = '➕ CREAR NUEVA MISIÓN EN RC 2'; }
       refreshDeviceSlots();

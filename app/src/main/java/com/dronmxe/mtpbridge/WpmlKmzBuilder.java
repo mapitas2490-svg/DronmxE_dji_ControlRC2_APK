@@ -229,7 +229,7 @@ public class WpmlKmzBuilder {
                     missionName.trim().replace(".kmz", "").replace(".kml", "") :
                     inputFile.getName().replace(".kmz", "").replace(".kml", "");
 
-            File targetKmz = new File(outputDir, safeName + "_pure_dji.kmz");
+            File targetKmz = File.createTempFile("pure_dji_", ".kmz", outputDir);
             String templateXml = generateTemplateKml(safeName, waypoints);
             String waylinesXml = generateWaylinesWpml(safeName, waypoints);
 

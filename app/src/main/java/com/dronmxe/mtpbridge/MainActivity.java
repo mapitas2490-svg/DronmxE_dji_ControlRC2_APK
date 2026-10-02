@@ -335,8 +335,6 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     searchDirs.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/Waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/waypoint"));
-                    searchDirs.add(getExternalFilesDir(null));
-                    searchDirs.add(getCacheDir());
 
                     for (File dir : searchDirs) {
                         if (dir != null && dir.exists() && dir.isDirectory()) {
@@ -345,7 +343,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                                 for (File f : list) {
                                     boolean duplicate = false;
                                     for (File existing : availableKmzFiles) {
-                                        if (existing.getName().equalsIgnoreCase(f.getName()) && existing.length() == f.length()) {
+                                        if (existing.getAbsolutePath().equalsIgnoreCase(f.getAbsolutePath()) ||
+                                            (existing.getName().equalsIgnoreCase(f.getName()) && existing.length() == f.length())) {
                                             duplicate = true;
                                             break;
                                         }
@@ -465,10 +464,19 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public boolean overwriteSlotFromLocal(String slotGuid, String localFileName) {
             File targetFile = null;
-            synchronized (availableKmzFiles) {
-                for (File f : availableKmzFiles) {
-                    if (f.getName().equals(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
-                        targetFile = f; break;
+            if (localFileName != null && !localFileName.trim().isEmpty()) {
+                File direct = new File(localFileName.trim());
+                if (direct.exists() && direct.isFile()) {
+                    targetFile = direct;
+                }
+            }
+
+            if (targetFile == null) {
+                synchronized (availableKmzFiles) {
+                    for (File f : availableKmzFiles) {
+                        if (f.getAbsolutePath().equalsIgnoreCase(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
+                            targetFile = f; break;
+                        }
                     }
                 }
             }
@@ -666,11 +674,31 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public boolean createNewSlotFromLocal(String localFileName) {
             File targetFile = null;
-            synchronized (availableKmzFiles) {
-                for (File f : availableKmzFiles) {
-                    if (f.getName().equals(localFileName)) {
-                        targetFile = f; break;
+            if (localFileName != null && !localFileName.trim().isEmpty()) {
+                File direct = new File(localFileName.trim());
+                if (direct.exists() && direct.isFile()) {
+                    targetFile = direct;
+                }
+            }
+
+            if (targetFile == null) {
+                synchronized (availableKmzFiles) {
+                    for (File f : availableKmzFiles) {
+                        if (f.getAbsolutePath().equalsIgnoreCase(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
+                            targetFile = f; break;
+                        }
                     }
+                }
+            }
+
+            if (targetFile == null || !targetFile.exists()) {
+                File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File candidate = new File(downloads, localFileName);
+                if (candidate.exists()) targetFile = candidate;
+                else {
+                    File dronmxeDir = new File(downloads, "dronmxE");
+                    File candidate2 = new File(dronmxeDir, localFileName);
+                    if (candidate2.exists()) targetFile = candidate2;
                 }
             }
 
