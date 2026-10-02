@@ -19,9 +19,12 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.webkit.JsResult;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -87,7 +90,30 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
         webView.addJavascriptInterface(new BridgeInterface(), "AndroidBridge");
 
-        webView.setWebChromeClient(new android.webkit.WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("dronmxE")
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> result.confirm())
+                        .setCancelable(false)
+                        .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("dronmxE MTP")
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> result.confirm())
+                        .setNegativeButton(android.R.string.cancel, (dialog, which) -> result.cancel())
+                        .setCancelable(false)
+                        .show();
+                return true;
+            }
+        });
         webView.setWebViewClient(new android.webkit.WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -441,9 +467,20 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             File targetFile = null;
             synchronized (availableKmzFiles) {
                 for (File f : availableKmzFiles) {
-                    if (f.getName().equals(localFileName)) {
+                    if (f.getName().equals(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
                         targetFile = f; break;
                     }
+                }
+            }
+
+            if (targetFile == null || !targetFile.exists()) {
+                File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File candidate = new File(downloads, localFileName);
+                if (candidate.exists()) targetFile = candidate;
+                else {
+                    File dronmxeDir = new File(downloads, "dronmxE");
+                    File candidate2 = new File(dronmxeDir, localFileName);
+                    if (candidate2.exists()) targetFile = candidate2;
                 }
             }
 

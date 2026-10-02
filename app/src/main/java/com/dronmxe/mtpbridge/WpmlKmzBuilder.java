@@ -138,10 +138,34 @@ public class WpmlKmzBuilder {
             byte[] finalWaylinesBytes;
 
             if (origTemplateBytes != null && origWaylinesValid) {
-                // Conservar los originales de DJI Fly al 100% para no alterar parámetros de vuelo nativos
-                finalTemplateBytes = origTemplateBytes;
-                finalWaylinesBytes = origWaylinesBytes;
-                logD(TAG, "Conservando wpmz/waylines.wpml y template.kml originales de DJI Fly e inyectando doc.kml");
+                // Conservar los originales de DJI Fly e inyectar el nombre de misión si no lo tiene
+                String tStr = new String(origTemplateBytes, StandardCharsets.UTF_8);
+                if (!tStr.contains("<wpml:missionName>")) {
+                    String folderBlock = "    <Folder>\n" +
+                                         "      <wpml:templateType>waypoint</wpml:templateType>\n" +
+                                         "      <wpml:templateId>0</wpml:templateId>\n" +
+                                         "      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n" +
+                                         "      <wpml:missionName><![CDATA[" + escapeXml(missionName) + "]]></wpml:missionName>\n" +
+                                         "    </Folder>\n" +
+                                         "  </Document>";
+                    if (tStr.contains("</Document>")) {
+                        tStr = tStr.replace("</Document>", folderBlock);
+                    }
+                    finalTemplateBytes = tStr.getBytes(StandardCharsets.UTF_8);
+                } else {
+                    finalTemplateBytes = origTemplateBytes;
+                }
+
+                String wStr = new String(origWaylinesBytes, StandardCharsets.UTF_8);
+                if (!wStr.contains("<wpml:missionName>")) {
+                    if (wStr.contains("<Folder>")) {
+                        wStr = wStr.replace("<Folder>", "<Folder>\n      <wpml:missionName><![CDATA[" + escapeXml(missionName) + "]]></wpml:missionName>");
+                    }
+                    finalWaylinesBytes = wStr.getBytes(StandardCharsets.UTF_8);
+                } else {
+                    finalWaylinesBytes = origWaylinesBytes;
+                }
+                logD(TAG, "Conservando wpmz/waylines.wpml y template.kml con nombre de misión: " + missionName);
             } else {
                 // Generar paquete WPML 1.0.3/1.0.6 completo y validado
                 String templateXml = generateTemplateKml(missionName, waypoints);
@@ -366,6 +390,7 @@ public class WpmlKmzBuilder {
 
     public static String generateTemplateKml(String missionName, List<Waypoint> waypoints) {
         long now = System.currentTimeMillis();
+        String safeName = (missionName != null && !missionName.trim().isEmpty()) ? escapeXml(missionName.trim()) : "Misión dronmxE";
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                "<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.3\">\n" +
                "  <Document>\n" +
@@ -384,6 +409,16 @@ public class WpmlKmzBuilder {
                "        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>\n" +
                "      </wpml:droneInfo>\n" +
                "    </wpml:missionConfig>\n" +
+               "    <Folder>\n" +
+               "      <wpml:templateType>waypoint</wpml:templateType>\n" +
+               "      <wpml:templateId>0</wpml:templateId>\n" +
+               "      <wpml:waylineCoordinateSysParam>\n" +
+               "        <wpml:coordinateMode>WGS84</wpml:coordinateMode>\n" +
+               "        <wpml:heightMode>EGM96</wpml:heightMode>\n" +
+               "      </wpml:waylineCoordinateSysParam>\n" +
+               "      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n" +
+               "      <wpml:missionName><![CDATA[" + safeName + "]]></wpml:missionName>\n" +
+               "    </Folder>\n" +
                "  </Document>\n" +
                "</kml>\n";
     }
@@ -396,6 +431,7 @@ public class WpmlKmzBuilder {
             totalDist += haversineMeters(w1.lon, w1.lat, w2.lon, w2.lat);
         }
         int totalSec = (int) Math.max(10, Math.round(totalDist / 8.0));
+        String safeName = (missionName != null && !missionName.trim().isEmpty()) ? escapeXml(missionName.trim()) : "Misión dronmxE";
 
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -420,6 +456,7 @@ public class WpmlKmzBuilder {
         sb.append("      <wpml:distance>").append((int) Math.round(totalDist)).append("</wpml:distance>\n");
         sb.append("      <wpml:duration>").append(totalSec).append("</wpml:duration>\n");
         sb.append("      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n");
+        sb.append("      <wpml:missionName><![CDATA[").append(safeName).append("]]></wpml:missionName>\n");
 
         for (int i = 0; i < waypoints.size(); i++) {
             Waypoint wp = waypoints.get(i);

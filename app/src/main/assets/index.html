@@ -20,13 +20,17 @@
     body{background:var(--bg-root);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
     
     /* STATUS BAR */
-    .sbar{background:#0e1014;border-bottom:1px solid var(--border);height:36px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-    .sleft{display:flex;align-items:center;gap:8px}
-    .sdot{width:8px;height:8px;border-radius:50%;background:var(--amber);transition:background .3s,box-shadow .3s}
+    .sbar{background:#0b0d11;border-bottom:1px solid var(--border);height:48px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .sleft{display:flex;align-items:center;gap:10px}
+    .app-logo{width:36px;height:36px;border-radius:9px;object-fit:cover;border:1.5px solid #22c55e;box-shadow:0 0 10px rgba(34,197,94,0.35);background:#000;flex-shrink:0}
+    .brand-title-wrap{display:flex;flex-direction:column}
+    .brand-name{font-size:13px;font-weight:900;letter-spacing:0.8px;background:linear-gradient(90deg, #22c55e 0%, #ffffff 50%, #ef4444 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase;line-height:1.1}
+    .status-row{display:flex;align-items:center;gap:6px;margin-top:2px}
+    .sdot{width:7px;height:7px;border-radius:50%;background:var(--amber);transition:background .3s,box-shadow .3s}
     .sdot.ok{background:var(--green);box-shadow:0 0 8px var(--green)}
     .sdot.err{background:var(--red)}
-    .slabel{font-size:11px;font-weight:600;color:var(--muted)}
-    .btn-rc{font-size:11px;font-weight:700;background:#22252e;color:var(--txt);border:1px solid var(--border);border-radius:5px;padding:4px 10px;cursor:pointer}
+    .slabel{font-size:10px;font-weight:600;color:var(--muted)}
+    .btn-rc{font-size:11px;font-weight:700;background:#22252e;color:var(--txt);border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;transition:background .15s}
     .btn-rc:active{background:#2d313d}
 
     /* TAB BAR (portrait) */
@@ -136,8 +140,14 @@
 
 <div class="sbar">
   <div class="sleft">
-    <div class="sdot" id="sdot"></div>
-    <span class="slabel" id="stxt">Buscando DJI RC 2...</span>
+    <img src="app_logo.png" class="app-logo" alt="dronmxE Logo" onerror="this.src='app_logo.jpg'" />
+    <div class="brand-title-wrap">
+      <span class="brand-name">dronmxE</span>
+      <div class="status-row">
+        <div class="sdot" id="sdot"></div>
+        <span class="slabel" id="stxt">Buscando DJI RC 2...</span>
+      </div>
+    </div>
   </div>
   <button class="btn-rc" onclick="refreshAll()">↻ Reconectar</button>
 </div>
@@ -650,9 +660,14 @@ function injectSelectedLocalToDevice(){
   if(!confirm('¿Sobreescribir la misión "' + targetName + '" en RC 2 con "' + S.selLocalMission.name + '"?')) return;
 
   appendLog('[MTP] Sobreescribiendo ' + S.selLocalMission.name + ' hacia ' + targetName + '...');
+  var syncBtn = document.getElementById('btn-sync');
+  if(syncBtn){ syncBtn.disabled = true; syncBtn.textContent = '⏳ INYECTANDO EN RC 2...'; }
   if(window.AndroidBridge && window.AndroidBridge.overwriteSlotFromLocal){
     var ok = window.AndroidBridge.overwriteSlotFromLocal(guid, S.selLocalMission.name);
-    if(ok) setTimeout(refreshDeviceSlots, 1200);
+    setTimeout(function(){
+      if(syncBtn){ syncBtn.textContent = '⚡ SOBREESCRIBIR EN RC 2'; }
+      refreshDeviceSlots();
+    }, 2000);
   }
 }
 
@@ -662,9 +677,14 @@ function createSelectedLocalAsNewDeviceSlot(){
   if(!confirm('¿Crear una NUEVA misión en DJI Fly (RC 2) basada en "' + S.selLocalMission.name + '"?')) return;
 
   appendLog('[MTP] Creando nueva misión en RC 2 desde ' + S.selLocalMission.name + '...');
+  var newBtn = document.getElementById('btn-new');
+  if(newBtn){ newBtn.disabled = true; newBtn.textContent = '⏳ CREANDO EN RC 2...'; }
   if(window.AndroidBridge && window.AndroidBridge.createNewSlotFromLocal){
     var ok = window.AndroidBridge.createNewSlotFromLocal(S.selLocalMission.name);
-    if(ok) setTimeout(refreshDeviceSlots, 1200);
+    setTimeout(function(){
+      if(newBtn){ newBtn.textContent = '➕ CREAR NUEVA MISIÓN EN RC 2'; }
+      refreshDeviceSlots();
+    }, 2000);
   }
 }
 
