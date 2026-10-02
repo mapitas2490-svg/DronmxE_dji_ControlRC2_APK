@@ -922,5 +922,120 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         public void vibrate() {
             triggerHaptic();
         }
+
+        @JavascriptInterface
+        public String saveKmzMission(String base64Data, String missionName, String targetSlotGuid) {
+            JSONObject result = new JSONObject();
+            try {
+                byte[] decodedBytes;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    decodedBytes = java.util.Base64.getDecoder().decode(base64Data);
+                } else {
+                    decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+                }
+
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (!downloadDir.exists()) downloadDir.mkdirs();
+                File kmzFile = new File(downloadDir, missionName + ".kmz");
+                FileOutputStream fos = new FileOutputStream(kmzFile);
+                fos.write(decodedBytes);
+                fos.close();
+                result.put("downloadPath", kmzFile.getAbsolutePath());
+                result.put("success", true);
+
+                fetchLocalMissionsAsync();
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "✅ Misión guardada en Download/" + missionName + ".kmz", Toast.LENGTH_SHORT).show();
+                    notifyJs("refreshLocalMissions();");
+                });
+            } catch (Exception e) {
+                try {
+                    result.put("success", false);
+                    result.put("error", e.getMessage());
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error al guardar: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+            return result.toString();
+        }
+
+        @JavascriptInterface
+        public void shareKmz(String base64Data, String missionName) {
+            new Thread(() -> {
+                try {
+                    byte[] decodedBytes;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        decodedBytes = java.util.Base64.getDecoder().decode(base64Data);
+                    } else {
+                        decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+                    }
+                    File cacheFile = new File(getCacheDir(), missionName + ".kmz");
+                    FileOutputStream fos = new FileOutputStream(cacheFile);
+                    fos.write(decodedBytes);
+                    fos.close();
+
+                    Uri contentUri = androidx.core.content.FileProvider.getUriForFile(
+                            MainActivity.this,
+                            getPackageName() + ".fileprovider",
+                            cacheFile
+                    );
+
+                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.setType("application/vnd.google-earth.kmz");
+                    shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+                    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(shareIntent, "Compartir Misión KMZ"));
+                } catch (Exception e) {
+                    showToast("Error al compartir: " + e.getMessage());
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void openNativeFilePicker() {
+            pickFile();
+        }
+
+        @JavascriptInterface
+        public void openEmail(String email) {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_SENDTO);
+                    intent.setData(Uri.parse("mailto:" + email + "?subject=dronmxE%20Misiones"));
+                    startActivity(intent);
+                } catch (Exception e) {
+                    showToast("Correo: " + email);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String getGpsLocation() {
+            try {
+                android.location.LocationManager lm = (android.location.LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                if (lm != null) {
+                    if (androidx.core.content.ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                        androidx.core.content.ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        List<String> providers = lm.getProviders(true);
+                        android.location.Location bestLoc = null;
+                        if (providers != null) {
+                            for (String provider : providers) {
+                                android.location.Location l = lm.getLastKnownLocation(provider);
+                                if (l != null && (bestLoc == null || l.getAccuracy() < bestLoc.getAccuracy())) {
+                                    bestLoc = l;
+                                }
+                            }
+                        }
+                        if (bestLoc != null) {
+                            JSONObject json = new JSONObject();
+                            json.put("lat", bestLoc.getLatitude());
+                            json.put("lng", bestLoc.getLongitude());
+                            json.put("accuracy", bestLoc.hasAccuracy() ? bestLoc.getAccuracy() : 15.0);
+                            return json.toString();
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            return "";
+        }
     }
 }
