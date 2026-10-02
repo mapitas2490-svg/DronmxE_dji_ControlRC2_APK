@@ -1015,16 +1015,30 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
                 File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 if (!downloadDir.exists()) downloadDir.mkdirs();
+                File dronmxeDir = new File(downloadDir, "dronmxE");
+                if (!dronmxeDir.exists()) dronmxeDir.mkdirs();
+
                 File kmzFile = new File(downloadDir, missionName + ".kmz");
-                FileOutputStream fos = new FileOutputStream(kmzFile);
-                fos.write(decodedBytes);
-                fos.close();
+                File kmzDronmxe = new File(dronmxeDir, missionName + ".kmz");
+                try (FileOutputStream fos = new FileOutputStream(kmzFile)) {
+                    fos.write(decodedBytes);
+                }
+                try (FileOutputStream fos = new FileOutputStream(kmzDronmxe)) {
+                    fos.write(decodedBytes);
+                }
+
+                synchronized (availableKmzFiles) {
+                    if (!availableKmzFiles.contains(kmzDronmxe)) {
+                        availableKmzFiles.add(0, kmzDronmxe);
+                    }
+                }
+
                 result.put("downloadPath", kmzFile.getAbsolutePath());
                 result.put("success", true);
 
                 fetchLocalMissionsAsync();
                 runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this, "✅ Misión guardada en Download/" + missionName + ".kmz", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "✅ Misión lista en KMZ y Control RC 2 MTP", Toast.LENGTH_SHORT).show();
                     notifyJs("refreshLocalMissions();");
                 });
             } catch (Exception e) {

@@ -516,12 +516,12 @@ public class WpmlKmzBuilder {
                "    <wpml:missionConfig>\n" +
                "      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>\n" +
                "      <wpml:finishAction>goHome</wpml:finishAction>\n" +
-               "      <wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>\n" +
+               "      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>\n" +
                "      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>\n" +
                "      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>\n" +
                "      <wpml:globalTransitionalSpeed>8.0</wpml:globalTransitionalSpeed>\n" +
                "      <wpml:droneInfo>\n" +
-               "        <wpml:droneEnumValue>68</wpml:droneEnumValue>\n" +
+               "        <wpml:droneEnumValue>90</wpml:droneEnumValue>\n" +
                "        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>\n" +
                "      </wpml:droneInfo>\n" +
                "    </wpml:missionConfig>\n" +
@@ -552,12 +552,12 @@ public class WpmlKmzBuilder {
         sb.append("    <wpml:missionConfig>\n");
         sb.append("      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>\n");
         sb.append("      <wpml:finishAction>goHome</wpml:finishAction>\n");
-        sb.append("      <wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>\n");
+        sb.append("      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>\n");
         sb.append("      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>\n");
         sb.append("      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>\n");
         sb.append("      <wpml:globalTransitionalSpeed>8.0</wpml:globalTransitionalSpeed>\n");
         sb.append("      <wpml:droneInfo>\n");
-        sb.append("        <wpml:droneEnumValue>68</wpml:droneEnumValue>\n");
+        sb.append("        <wpml:droneEnumValue>90</wpml:droneEnumValue>\n");
         sb.append("        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>\n");
         sb.append("      </wpml:droneInfo>\n");
         sb.append("    </wpml:missionConfig>\n");

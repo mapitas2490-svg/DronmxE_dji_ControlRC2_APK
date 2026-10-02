@@ -80,6 +80,13 @@ public class MtpHelper {
     private static final String[][] WAYPOINT_PATH_CANDIDATES = new String[][]{
             {"Android", "data", "dji.go.v5", "files", "Waypoint"},
             {"Android", "data", "dji.go.v5", "files", "waypoint"},
+            {".dji.go.v5", "waypoint"},
+            {".dji.go.v5", "Waypoint"},
+            {"dji.go.v5", "waypoint"},
+            {"dji.go.v5", "Waypoint"},
+            {".waypoint"},
+            {"waypoint"},
+            {"Waypoint"},
             {"android", "data", "dji.go.v5", "files", "Waypoint"},
             {"android", "data", "dji.go.v5", "files", "waypoint"},
             {"Android", "data", "com.dji.industry.pilot", "files", "Waypoint"},
@@ -134,7 +141,7 @@ public class MtpHelper {
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            context.registerReceiver(usbReceiver, filter, Context.RECEIVER_EXPORTED);
         } else {
             context.registerReceiver(usbReceiver, filter);
         }
@@ -203,7 +210,18 @@ public class MtpHelper {
                 }
                 if (targetDevice == null) {
                     for (UsbDevice dev : deviceList.values()) {
-                        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE || dev.getDeviceClass() == 0) {
+                        for (int i = 0; i < dev.getInterfaceCount(); i++) {
+                            android.hardware.usb.UsbInterface intf = dev.getInterface(i);
+                            if (intf.getInterfaceClass() == UsbConstants.USB_CLASS_STILL_IMAGE) {
+                                targetDevice = dev; break;
+                            }
+                        }
+                        if (targetDevice != null) break;
+                    }
+                }
+                if (targetDevice == null) {
+                    for (UsbDevice dev : deviceList.values()) {
+                        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE) {
                             targetDevice = dev; break;
                         }
                     }
@@ -343,8 +361,8 @@ public class MtpHelper {
 
             if (storageIds == null || storageIds.length == 0) {
                 callback.onDeviceStatus(true, "Conectado (bloqueado)");
-                callback.onLog("[!] RC 2 no expone unidades. Selecciona 'Transferencia de Archivos' en el control.");
-                closeConnection();
+                callback.onLog("[!] RC 2 en espera de permiso. Toca 'Transferencia de Archivos' en la pantalla del control RC 2 y luego pulsa ↻.");
+                isScanning = false;
                 return slots;
             }
 

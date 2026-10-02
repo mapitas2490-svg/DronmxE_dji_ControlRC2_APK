@@ -5,7 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>dronmxE - DJI Waypoint Mission Planner</title>
   <link rel="stylesheet" href="leaflet.css" />
-  <script src="leaflet.js"></script>
+  <script src="leaflet.js">
+function directOverwriteSlot(guid, e) {
+  if (e) e.stopPropagation();
+  selectDeviceSlot(guid);
+  if (!S.connected) {
+    if (window.AndroidBridge && window.AndroidBridge.showToast) {
+      window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
+    } else {
+      alert("⚠️ Conecta el cable OTG al DJI RC 2");
+    }
+    return;
+  }
+  if (!S.selLocalMission) {
+    if (window.AndroidBridge && window.AndroidBridge.showToast) {
+      window.AndroidBridge.showToast("⚠️ Selecciona una misión local primero");
+    } else {
+      alert("⚠️ Selecciona una misión local primero");
+    }
+    return;
+  }
+  injectSelectedLocalToDevice();
+}
+
+function directSyncLocalMission(mName, e) {
+  if (e) e.stopPropagation();
+  const m = S.localMissions.find(x => x.name === mName);
+  if (m) selectLocalMission(m);
+  if (!S.connected) {
+    if (window.AndroidBridge && window.AndroidBridge.showToast) {
+      window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
+    } else {
+      alert("⚠️ Conecta el cable OTG al DJI RC 2");
+    }
+    return;
+  }
+  if (S.selDeviceGuid) {
+    injectSelectedLocalToDevice();
+  } else {
+    createSelectedLocalAsNewDeviceSlot();
+  }
+}
+
+</script>
   <script src="jszip.min.js"></script>
   <style>
     :root {
@@ -1055,6 +1097,42 @@
       border-radius: 50%;
       opacity: 0.85;
     }
+    .alt-label-tooltip {
+      background: rgba(15, 23, 42, 0.90) !important;
+      color: #38bdf8 !important;
+      border: 1px solid rgba(56, 189, 248, 0.5) !important;
+      font-size: 10px !important;
+      font-weight: 800 !important;
+      padding: 2px 6px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+      white-space: nowrap !important;
+    }
+    .alt-label-tooltip::before {
+      border-top-color: rgba(15, 23, 42, 0.90) !important;
+    }
+    .btn-sync-direct {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: rgba(34, 197, 94, 0.18);
+      border: 1px solid rgba(34, 197, 94, 0.45);
+      color: #22c55e;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-sync-direct:hover {
+      background: rgba(34, 197, 94, 0.4);
+      color: #fff;
+      border-color: #22c55e;
+    }
+    .btn-sync-direct:active {
+      transform: scale(.92);
+    }
     .custom-takeoff-icon {
       background: #2e7d32;
       border: 3px solid #ffffff;
@@ -1582,12 +1660,11 @@
         </div>
       </div>
 
-      <!-- Mode Selector: Area, Corridor, Circle, Quick -->
+      <!-- Mode Selector: Area, Corridor, 3D -->
       <div class="mode-tab-bar">
-        <div class="mode-tab active" onclick="setMissionMode('Area')">Area</div>
-        <div class="mode-tab" onclick="setMissionMode('Corridor')">Corridor</div>
-        <div class="mode-tab" onclick="setMissionMode('Circle')">Circle</div>
-        <div class="mode-tab" onclick="setMissionMode('Quick')">Quick</div>
+        <div class="mode-tab active" onclick="setMissionMode('Area')">Área</div>
+        <div class="mode-tab" onclick="setMissionMode('Corridor')">Corredor</div>
+        <div class="mode-tab" onclick="setMissionMode('3D')">Vuelo 3D</div>
       </div>
 
       <!-- Missions Library List -->
@@ -1646,11 +1723,12 @@
         <!-- Camera Model -->
         <div class="config-group">
           <label class="config-label">Cámara</label>
-          <select id="cfg-camera" class="select-input" onchange="recalculateMission()">
-            <option value="DJI_MINI_5_PRO" selected>DJI Mini 5 Pro (1/1.3" CMOS, 24mm)</option>
-            <option value="DJI_MINI_4_PRO">DJI Mini 4 Pro (1/1.3" CMOS, 24mm)</option>
-            <option value="DJI_AIR_3S">DJI Air 3S (1" CMOS 50MP, 24mm)</option>
-            <option value="DJI_MAVIC_3_PRO">DJI Mavic 3 Pro (4/3 CMOS 20MP)</option>
+          <select id="cfg-camera" class="select-input" onchange="onCameraSelectChange(this.value)">
+            <option value="DJI_AIR_3S" selected>DJI Air 3S (1" CMOS 50MP, 24mm f/1.8)</option>
+            <option value="DJI_MAVIC_3_ENTERPRISE">DJI Mavic 3 Enterprise (4/3" CMOS 20MP Mecánico)</option>
+            <option value="DJI_MINI_4_PRO">DJI Mini 4 Pro (1/1.3" CMOS 48MP, 24mm)</option>
+            <option value="DJI_MINI_5_PRO">DJI Mini 5 Pro (1/1.3" CMOS 48MP, 24mm)</option>
+            <option value="DJI_MAVIC_3_PRO">DJI Mavic 3 Pro (4/3" CMOS 20MP, 24mm)</option>
           </select>
         </div>
 
@@ -1727,46 +1805,37 @@
           </div>
         </div>
 
-        <!-- Grid Orientation Toggle -->
-        <div class="toggle-row">
-          <label class="config-label" style="margin: 0;">Orientación de cuadrícula auto</label>
-          <label class="switch">
-            <input type="checkbox" id="chk-auto-grid" checked onchange="toggleAutoGrid(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <!-- Manual Grid Angle Stepper (if auto is off) -->
-        <div class="config-group" id="manual-grid-group" style="display: none;">
-          <label class="config-label">Ángulo manual de pasada (°)</label>
-          <div class="stepper-wrap">
-            <button class="step-btn" onclick="adjustStep('gridAngle', -15)">-</button>
-            <div class="step-val-box" id="disp-grid-angle">45°</div>
-            <button class="step-btn" onclick="adjustStep('gridAngle', 15)">+</button>
+        <!-- Flight Orientation / Angle Slider Bar -->
+        <div class="config-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="config-label" style="margin: 0;">Orientación de Vuelo / Pasada</label>
+            <span id="disp-grid-angle" style="font-weight: 800; color: var(--primary); font-size: 0.95rem;">0°</span>
+          </div>
+          <input type="range" id="slider-grid-angle" min="0" max="360" step="1" value="0" style="width: 100%; accent-color: var(--primary); cursor: pointer;" oninput="onGridAngleSliderChange(this.value)">
+          <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.72rem; color: var(--text-muted);">
+            <span style="cursor: pointer; padding: 3px 8px; background: #e2e8f0; border-radius: 4px; font-weight: 600;" onclick="setGridAngleQuick(0)">0° N</span>
+            <span style="cursor: pointer; padding: 3px 8px; background: #e2e8f0; border-radius: 4px; font-weight: 600;" onclick="setGridAngleQuick(90)">90° E</span>
+            <span style="cursor: pointer; padding: 3px 8px; background: #e2e8f0; border-radius: 4px; font-weight: 600;" onclick="setGridAngleQuick(180)">180° S</span>
+            <span style="cursor: pointer; padding: 3px 8px; background: #e2e8f0; border-radius: 4px; font-weight: 600;" onclick="setGridAngleQuick(270)">270° O</span>
           </div>
         </div>
 
-        <!-- Signal Loss -->
-        <div class="toggle-row">
-          <label class="config-label" style="margin: 0;">Al perder señal: Continuar misión</label>
-          <label class="switch">
-            <input type="checkbox" id="chk-signal-continue" checked>
-            <span class="slider"></span>
-          </label>
+        <!-- RTH Policy Banner -->
+        <div class="config-group" style="background: #f1f5f9; padding: 10px 12px; border-radius: 8px; border-left: 4px solid var(--primary); margin-top: 4px;">
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">
+            Fin de Misión y Pérdida de Señal:
+          </div>
+          <div style="font-size: 0.78rem; color: #334155; display: flex; align-items: center; gap: 6px;">
+            <span>🏠</span> <strong>Regreso automático a Home (RTH)</strong>
+          </div>
         </div>
-
-        <!-- Direct Trigger Button -->
-        <button class="btn-outline-pill" onclick="openSendToDjiFlyModal()">
-          Enviar a DJI Fly...
-        </button>
       </div>
 
-      <!-- Config Footer: Back, Save, Next -->
+      <!-- Config Footer: Back, Save & Export KMZ -->
       <div class="drawer-footer">
         <div class="config-nav-row">
-          <button class="pill-btn btn-back" onclick="switchToView('map')">Volver</button>
-          <button class="pill-btn btn-save" onclick="openSaveMissionModal()">Guardar</button>
-          <button class="pill-btn btn-next" onclick="switchToView('export')">Siguiente</button>
+          <button class="pill-btn btn-back" onclick="switchToView('map')">Volver al Mapa</button>
+          <button class="pill-btn btn-save" onclick="openSaveMissionModal()" style="flex: 2; background: #2e7d32; color: #fff; font-weight: 700; box-shadow: 0 2px 6px rgba(46,125,50,0.3);">💾 Guardar y Exportar KMZ</button>
         </div>
       </div>
     </div>
@@ -1830,103 +1899,17 @@
   </div>
 
   <!-- =========================================================
-       SCREEN 3: EXPORT KMZ FULL SCREEN
-       ========================================================= -->
-  <div id="export-screen">
-    <div class="export-top-bar">
-      <div class="export-top-left">
-        <button class="btn-icon-back" onclick="closeExportScreen()">←</button>
-        <div class="export-header-text">
-          <h2>Exportar KMZ</h2>
-          <p>Selecciona una misión y un slot de DJI Fly.</p>
-        </div>
-      </div>
-      <div class="export-top-actions">
-        <button class="btn-export-pill" onclick="saveKmzToDownloads()">💾 Guardar en Descargas</button>
-        <button class="btn-export-pill" onclick="closeExportScreen()">⌂ Inicio</button>
-      </div>
-    </div>
+     MODAL 2: GUARDAR Y EXPORTAR MISIÓN
 
-    <div class="export-body">
-      <div class="file-name-field">
-        <label>Nombre de archivo:</label>
-        <input type="text" id="export-filename" value="xochimilco_fotogrametria" />
-      </div>
-
-      <div class="export-two-col">
-        <!-- Left Col: Missions -->
-        <div class="export-col-card">
-          <div class="col-header">
-            <span>Misiones</span>
-            <button class="btn-refresh" onclick="refreshExportMissionsList()">↻</button>
-          </div>
-          <div id="export-missions-list" style="display: flex; flex-direction: column; gap: 8px;">
-            <div class="slot-item selected">
-              <div class="slot-item-info">
-                <h5 id="exp-current-mission-name">xochimilco (actual)</h5>
-                <p id="exp-current-mission-sub">Listo para exportar</p>
-              </div>
-              <span style="color: var(--primary); font-weight: 800;">✓</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Col: DJI Fly slots -->
-        <div class="export-col-card">
-          <div class="col-header">
-            <span>Slots de DJI Fly</span>
-            <button class="btn-refresh" onclick="refreshDjiSlots()">↻</button>
-          </div>
-
-          <div id="dji-slots-container" class="modal-slots-list"></div>
-
-          <button class="btn-export-pill" style="margin-top: 10px; background: var(--primary); color: #fff; justify-content: center; padding: 12px;" onclick="executeDjiInjection()">
-            🚀 Inyectar Misión en DJI Fly
-          </button>
-
-          <div class="direct-access-badge">
-            Acceso directo a carpeta — sin errores de .offlineflightmission_history.txt
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- =========================================================
-       MODAL 1: SEND TO DJI FLY
-       ========================================================= -->
-  <div id="modal-send-dji" class="modal-overlay">
-    <div class="modal-card">
-      <h3 class="modal-title">Enviar a DJI Fly</h3>
-      <div class="modal-subtext-blue">
-        Acceso directo a carpeta activo — la misión se copia directamente a la biblioteca de Waypoints de DJI Fly y aparecerá en el Historial del control RC 2.
-      </div>
-
-      <div class="modal-section-title">
-        <span>Slots de DJI Fly</span>
-        <button class="btn-refresh" style="background: none; border: none; cursor: pointer; font-size: 1.1rem;" onclick="refreshDjiSlots()">↻</button>
-      </div>
-
-      <div id="modal-slots-list" class="modal-slots-list"></div>
-
-      <div class="modal-actions">
-        <button class="modal-btn-close" onclick="closeModal('modal-send-dji')">Cerrar</button>
-        <button class="modal-btn-send" onclick="executeDjiInjection()">Enviar a Slot</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- =========================================================
-       MODAL 2: GUARDAR MISIÓN
        ========================================================= -->
   <div id="modal-save-mission" class="modal-overlay">
     <div class="modal-card">
-      <h3 class="modal-title">Guardar Misión</h3>
-      <p style="font-size: 0.85rem; color: var(--text-muted);">Asigna un nombre para guardar esta misión en tu biblioteca:</p>
+      <h3 class="modal-title">💾 Guardar y Exportar Misión</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">La misión se guardará en tu biblioteca (actualizando la actual sin duplicar) y se exportará automáticamente en KMZ directo para el control RC 2:</p>
       <input type="text" id="save-mission-name-input" class="modal-input" placeholder="Nombre de la misión..." value="Mision_Fotogrametria" />
       <div class="modal-actions">
         <button class="modal-btn-close" onclick="closeModal('modal-save-mission')">Cancelar</button>
-        <button class="modal-btn-send" onclick="confirmSaveMission()">Guardar</button>
+        <button class="modal-btn-send" onclick="confirmSaveMission()" style="background: #2e7d32; color: #fff; font-weight: 700;">💾 Guardar y Exportar KMZ</button>
       </div>
     </div>
   </div>
@@ -2098,7 +2081,7 @@
 <script>
     // State
     const AppState = {
-      mode: 'Area', // Area, Corridor, Circle, Quick
+      mode: 'Area', // Area, Corridor, 3D
       altitudeMode: 'takeoff', // takeoff, ground
       altitude: 80.0,
       speed: 8.0,
@@ -2106,22 +2089,24 @@
       sideOverlap: 70,
       gimbalPitch: -90.0,
       shutterSpeed: 1000,
-      autoGrid: true,
-      gridAngle: 45,
-      signalLossContinue: true,
-      camera: 'DJI_MINI_5_PRO',
+      autoGrid: false,
+      gridAngle: 0,
+      signalLossContinue: false, // Regreso a Home por defecto
+      camera: 'DJI_AIR_3S', // DEFAULT ALWAYS AIR 3S
       points: [], // LatLng vertices
       waylines: [], // Calculated flight waypoints
       activeSlotGuid: 'NEW',
       savedMissions: []
     };
 
-    // Camera specs
+    // Camera optical and sensor specifications
+    // DJI Air 3S: 1" CMOS (13.2 x 8.8mm), 8.4mm focal length (24mm eq), 8192x5464 (50MP), droneId 90
     const CameraSpecs = {
-      DJI_MINI_5_PRO: { sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
-      DJI_MINI_4_PRO: { sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
-      DJI_AIR_3S: { sensorW: 13.2, sensorH: 8.8, focal: 8.4, imgW: 8192, imgH: 5464, droneId: 90 },
-      DJI_MAVIC_3_PRO: { sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 60 }
+      DJI_AIR_3S: { name: 'DJI Air 3S', sensorW: 13.2, sensorH: 8.8, focal: 8.4, imgW: 8192, imgH: 5464, droneId: 90 },
+      DJI_MAVIC_3_ENTERPRISE: { name: 'DJI Mavic 3 Enterprise', sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 67 },
+      DJI_MINI_4_PRO: { name: 'DJI Mini 4 Pro', sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
+      DJI_MINI_5_PRO: { name: 'DJI Mini 5 Pro', sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
+      DJI_MAVIC_3_PRO: { name: 'DJI Mavic 3 Pro', sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 60 }
     };
 
     let map, polygonLayer, flightLinesLayer, markersLayer;
@@ -2152,7 +2137,7 @@
       markersLayer = L.featureGroup().addTo(map);
 
       map.on('click', function(e) {
-        if (AppState.mode === 'Area' || AppState.mode === 'Corridor') {
+        if (AppState.mode === 'Area' || AppState.mode === 'Corridor' || AppState.mode === '3D') {
           addBoundaryPoint(e.latlng);
         } else if (AppState.mode === 'Circle') {
           setupCircleCenter(e.latlng);
@@ -2182,16 +2167,49 @@
     function setMissionMode(mode) {
       AppState.mode = mode;
       document.querySelectorAll('.mode-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.textContent.trim() === mode);
+        const text = tab.textContent.trim();
+        tab.classList.toggle('active', (mode === 'Area' && text === 'Área') ||
+                                       (mode === 'Corridor' && text === 'Corredor') ||
+                                       (mode === '3D' && text === 'Vuelo 3D'));
       });
-      if (mode === 'Quick') {
-        createQuickRectangle();
-      } else if (mode === 'Circle') {
-        createCircleMission();
-      } else {
-        renderBoundary();
-        recalculateMission();
+      if (mode === '3D') {
+        AppState.gimbalPitch = -60.0;
+        const dispGimbal = document.getElementById('disp-gimbal');
+        if (dispGimbal) dispGimbal.textContent = '-60.0° (Oblicuo 3D)';
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Modo Vuelo 3D: Doble pasada cruzada y gimbal a -60°");
+        }
+      } else if (mode === 'Area') {
+        if (AppState.gimbalPitch === -60.0) {
+          AppState.gimbalPitch = -90.0;
+          const dispGimbal = document.getElementById('disp-gimbal');
+          if (dispGimbal) dispGimbal.textContent = '-90.0° (Nadir)';
+        }
       }
+      renderBoundary();
+      recalculateMission();
+    }
+
+    function onGridAngleSliderChange(val) {
+      const angle = parseInt(val) || 0;
+      AppState.gridAngle = angle;
+      const disp = document.getElementById('disp-grid-angle');
+      if (disp) disp.textContent = angle + '°';
+      recalculateMission();
+    }
+
+    function setGridAngleQuick(angle) {
+      AppState.gridAngle = angle;
+      const slider = document.getElementById('slider-grid-angle');
+      if (slider) slider.value = angle;
+      const disp = document.getElementById('disp-grid-angle');
+      if (disp) disp.textContent = angle + '°';
+      recalculateMission();
+    }
+
+    function onCameraSelectChange(camKey) {
+      AppState.camera = camKey;
+      recalculateMission();
     }
 
     function addBoundaryPoint(latlng) {
@@ -2210,6 +2228,15 @@
     }
 
     function undoLastPoint() {
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      if (cur && cur.locked !== false) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Desbloquéala para modificar.');
+        } else {
+          alert('🔒 Misión protegida con candado. Desbloquéala para modificar.');
+        }
+        return;
+      }
       if (AppState.points.length > 0) {
         AppState.points.pop();
         renderBoundary();
@@ -2265,9 +2292,12 @@
         }).addTo(polygonLayer);
       }
 
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      const isLocked = cur && cur.locked !== false;
+
       pts.forEach((pt, idx) => {
         const marker = L.marker(pt, {
-          draggable: true,
+          draggable: !isLocked,
           icon: L.divIcon({
             className: 'custom-vertex-icon',
             iconSize: [16, 16],
@@ -2275,14 +2305,16 @@
           })
         }).addTo(markersLayer);
 
-        marker.on('drag', function(e) {
-          AppState.points[idx] = e.target.getLatLng();
-          renderBoundary();
-          recalculateMission();
-        });
+        if (!isLocked) {
+          marker.on('drag', function(e) {
+            AppState.points[idx] = e.target.getLatLng();
+            renderBoundary();
+            recalculateMission();
+          });
+        }
       });
 
-      if (pts.length >= 3 && AppState.mode !== 'Corridor') {
+      if (pts.length >= 3 && AppState.mode !== 'Corridor' && !isLocked) {
         for (let i = 0; i < pts.length; i++) {
           const nextIdx = (i + 1) % pts.length;
           const midLat = (pts[i].lat + pts[nextIdx].lat) / 2;
@@ -2387,28 +2419,79 @@
       let gridWaypoints = [];
       if (AppState.mode === 'Corridor') {
         gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+      } else if (AppState.mode === '3D') {
+        // Modo 3D: Doble pasada ortogonal cruzada (Cross-Hatch)
+        const pass1 = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
+        const pass2 = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, ((AppState.gridAngle || 0) + 90) % 360);
+        gridWaypoints = pass1.concat(pass2);
       } else {
-        gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing);
+        // Modo Área
+        gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
       }
       AppState.waylines = gridWaypoints;
 
-      if (gridWaypoints.length > 1) {
-        const latlngs = gridWaypoints.map(w => L.latLng(w.lat, w.lng));
-        L.polyline(latlngs, {
-          color: '#ffd54f',
-          weight: 2.5,
-          opacity: 0.95
-        }).addTo(flightLinesLayer);
+      // Altimetry and Ground mode rendering
+      const isGroundMode = (AppState.altitudeMode === 'ground');
+      const baseAlt = AppState.altitude || 80.0;
 
-        gridWaypoints.forEach(w => {
-          L.circleMarker([w.lat, w.lng], {
-            radius: 3.5,
-            fillColor: '#ffd54f',
-            color: '#1e293b',
-            weight: 1,
-            fillOpacity: 1
+      if (gridWaypoints.length > 1) {
+        if (isGroundMode) {
+          // Curvas y líneas con gradiente de altimetría (Verde -> Amarillo -> Rojo)
+          for (let i = 0; i < gridWaypoints.length - 1; i++) {
+            const p1 = gridWaypoints[i];
+            const p2 = gridWaypoints[i + 1];
+            const t = i / (gridWaypoints.length - 1);
+            // Simulación topográfica continua: variación de relieve respecto al centro
+            const altSim = baseAlt + Math.sin(t * Math.PI * 2) * 15;
+            let altColor = '#22c55e'; // Verde (baja)
+            if (t > 0.35 && t <= 0.7) altColor = '#eab308'; // Amarillo (media)
+            else if (t > 0.7) altColor = '#ef4444'; // Rojo (elevada)
+
+            L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], {
+              color: altColor,
+              weight: 3.5,
+              opacity: 0.95
+            }).addTo(flightLinesLayer);
+          }
+
+          gridWaypoints.forEach((w, idx) => {
+            const t = idx / (gridWaypoints.length - 1);
+            const altSim = Math.round(baseAlt + Math.sin(t * Math.PI * 2) * 15);
+            let altColor = '#22c55e';
+            if (t > 0.35 && t <= 0.7) altColor = '#eab308';
+            else if (t > 0.7) altColor = '#ef4444';
+
+            const marker = L.circleMarker([w.lat, w.lng], {
+              radius: 4,
+              fillColor: altColor,
+              color: '#ffffff',
+              weight: 1.5,
+              fillOpacity: 1
+            }).addTo(flightLinesLayer);
+
+            if (idx % 6 === 0 || idx === 0 || idx === gridWaypoints.length - 1) {
+              marker.bindTooltip(`${altSim}m AGL`, { permanent: true, direction: 'top', className: 'alt-label-tooltip' });
+            }
+          });
+        } else {
+          // Modo Takeoff estándar: oro de aviación limpio y nítido
+          const latlngs = gridWaypoints.map(w => L.latLng(w.lat, w.lng));
+          L.polyline(latlngs, {
+            color: '#ffd54f',
+            weight: 2.5,
+            opacity: 0.95
           }).addTo(flightLinesLayer);
-        });
+
+          gridWaypoints.forEach(w => {
+            L.circleMarker([w.lat, w.lng], {
+              radius: 3.5,
+              fillColor: '#ffd54f',
+              color: '#1e293b',
+              weight: 1,
+              fillOpacity: 1
+            }).addTo(flightLinesLayer);
+          });
+        }
       }
 
       let totalDist = 0;
@@ -2454,7 +2537,77 @@
       return Math.abs(area * R * R / 2.0);
     }
 
-    function generateTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters) {
+    function generateTransectWaylines(pts, lineSpacingMeters, photoSpacingMeters, angleDeg = 0) {
+      if (!pts || pts.length < 3) return [];
+      const rad = (angleDeg || 0) * Math.PI / 180;
+      const cosA = Math.cos(rad);
+      const sinA = Math.sin(rad);
+
+      let sumLat = 0, sumLng = 0;
+      pts.forEach(p => { sumLat += p.lat; sumLng += p.lng; });
+      const cLat = sumLat / pts.length;
+      const cLng = sumLng / pts.length;
+      const mPerDegLat = 111320;
+      const mPerDegLng = 111320 * Math.cos(cLat * Math.PI / 180);
+
+      // Rotate points by -angleDeg around centroid
+      const rotPts = pts.map(p => {
+        const x = (p.lng - cLng) * mPerDegLng;
+        const y = (p.lat - cLat) * mPerDegLat;
+        return {
+          x: x * cosA + y * sinA,
+          y: -x * sinA + y * cosA
+        };
+      });
+
+      let minY = Infinity, maxY = -Infinity;
+      rotPts.forEach(p => {
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      });
+
+      const waypoints = [];
+      let forward = true;
+      const stepY = Math.max(4, lineSpacingMeters);
+
+      for (let y = minY + (stepY * 0.5); y <= maxY; y += stepY) {
+        const xIntersections = [];
+        for (let i = 0; i < rotPts.length; i++) {
+          const p1 = rotPts[i];
+          const p2 = rotPts[(i + 1) % rotPts.length];
+          if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+            const x = p1.x + (y - p1.y) / (p2.y - p1.y) * (p2.x - p1.x);
+            xIntersections.push(x);
+          }
+        }
+        xIntersections.sort((a, b) => a - b);
+
+        for (let k = 0; k < xIntersections.length; k += 2) {
+          if (k + 1 < xIntersections.length) {
+            const x1 = xIntersections[k];
+            const x2 = xIntersections[k + 1];
+            const startX = forward ? x1 : x2;
+            const endX = forward ? x2 : x1;
+            const lineDist = Math.abs(endX - startX);
+            const numPhotos = Math.max(1, Math.round(lineDist / Math.max(2, photoSpacingMeters)));
+
+            for (let s = 0; s <= numPhotos; s++) {
+              const frac = s / numPhotos;
+              const curX = startX + (endX - startX) * frac;
+              const origX = curX * cosA - y * sinA;
+              const origY = curX * sinA + y * cosA;
+              const lat = cLat + origY / mPerDegLat;
+              const lng = cLng + origX / mPerDegLng;
+              waypoints.push({ lat, lng });
+            }
+            forward = !forward;
+          }
+        }
+      }
+      return waypoints;
+    }
+
+    function _old_generateTransectWaylines_unused(pts, lineSpacingMeters, photoSpacingMeters) {
       const bounds = L.latLngBounds(pts);
       const south = bounds.getSouth();
       const north = bounds.getNorth();
@@ -2575,24 +2728,63 @@
       openModal('modal-save-mission');
     }
 
-    function confirmSaveMission() {
-      const name = document.getElementById('save-mission-name-input').value.trim() || 'Mision_1';
+    function openSaveMissionModal() {
+      const curName = AppState.currentMissionName || ("Mision_" + new Date().toISOString().slice(5, 10));
+      document.getElementById('save-mission-name-input').value = curName;
+      openModal('modal-save-mission');
+    }
+
+    async function confirmSaveMission() {
+      const name = document.getElementById('save-mission-name-input').value.trim() || AppState.currentMissionName || 'Mision_1';
+
+      let targetIdx = AppState.currentMissionIdx;
+      if (targetIdx === null || targetIdx === undefined || !AppState.savedMissions[targetIdx]) {
+        const existingIdx = AppState.savedMissions.findIndex(m => m.name === name);
+        if (existingIdx >= 0) targetIdx = existingIdx;
+      }
+
       const mission = {
         name: name,
         date: new Date().toLocaleDateString(),
         points: AppState.points.map(p => ({ lat: p.lat, lng: p.lng })),
         altitude: AppState.altitude,
         speed: AppState.speed,
-        camera: AppState.camera
+        camera: AppState.camera,
+        gridAngle: AppState.gridAngle || 0,
+        mode: AppState.mode || 'Area',
+        locked: true // Re-bloquear automáticamente al guardar
       };
-      AppState.savedMissions.push(mission);
+
+      if (targetIdx !== null && targetIdx !== undefined && AppState.savedMissions[targetIdx]) {
+        // SOBREESCRIBIR EN LA MISMA MISIÓN (NO CREAR DUPLICADOS)
+        AppState.savedMissions[targetIdx] = mission;
+        AppState.currentMissionIdx = targetIdx;
+      } else {
+        // NUEVA MISIÓN
+        AppState.savedMissions.push(mission);
+        AppState.currentMissionIdx = AppState.savedMissions.length - 1;
+      }
+
+      AppState.currentMissionName = name;
       localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
-      loadSavedMissionsFromStorage();
-    ensureInitialMissions();
-    if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
+      renderMissionsList();
+      updateLockStatusBadge();
       closeModal('modal-save-mission');
+
+      // EXPORTAR AUTOMÁTICAMENTE EN KMZ PARA RC 2 (MTP)
+      try {
+        if (typeof buildDjiKmzBlob === 'function') {
+          const base64Data = await buildDjiKmzBlob(name);
+          if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
+            window.AndroidBridge.saveKmzMission(base64Data, name, "NEW");
+          }
+        }
+      } catch (err) {
+        console.error("Error auto-exporting KMZ on save:", err);
+      }
+
       if (window.AndroidBridge && window.AndroidBridge.showToast) {
-        window.AndroidBridge.showToast("Misión '" + name + "' guardada con éxito");
+        window.AndroidBridge.showToast("✅ Misión '" + name + "' guardada y exportada a KMZ [🔒]");
       }
     }
 
@@ -2818,7 +3010,30 @@
       AppState.points = m.points.map(p => L.latLng(p.lat, p.lng));
       AppState.altitude = m.altitude || 80;
       AppState.speed = m.speed || 8;
-      AppState.camera = m.camera || 'DJI_MINI_5_PRO';
+      AppState.camera = m.camera || 'DJI_AIR_3S';
+      AppState.gridAngle = m.gridAngle || 0;
+      AppState.mode = m.mode || 'Area';
+
+      // Sincronizar controles visuales DOM
+      const altElem = document.getElementById('disp-altitude');
+      if (altElem) altElem.textContent = AppState.altitude + ' m';
+      const spdElem = document.getElementById('disp-speed');
+      if (spdElem) spdElem.textContent = AppState.speed + ' m/s';
+      const camElem = document.getElementById('cfg-camera');
+      if (camElem) camElem.value = AppState.camera;
+      const angleSlider = document.getElementById('slider-grid-angle');
+      if (angleSlider) angleSlider.value = AppState.gridAngle;
+      const angleDisp = document.getElementById('disp-grid-angle');
+      if (angleDisp) angleDisp.textContent = AppState.gridAngle + '°';
+
+      // Sincronizar pestañas de modo
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        const text = tab.textContent.trim();
+        tab.classList.toggle('active', (AppState.mode === 'Area' && text === 'Área') ||
+                                       (AppState.mode === 'Corridor' && text === 'Corredor') ||
+                                       (AppState.mode === '3D' && text === 'Vuelo 3D'));
+      });
+
       renderBoundary();
       recalculateMission();
       switchToView('map');
@@ -2961,8 +3176,8 @@
     <wpml:missionConfig>
       <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
       <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>${AppState.signalLossContinue ? 'executeLostAction' : 'goBack'}</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>${AppState.signalLossContinue ? 'continue' : 'goBack'}</wpml:executeRCLostAction>
+      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
         <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
@@ -3021,8 +3236,8 @@
     <wpml:missionConfig>
       <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
       <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>${AppState.signalLossContinue ? 'executeLostAction' : 'goBack'}</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>${AppState.signalLossContinue ? 'continue' : 'goBack'}</wpml:executeRCLostAction>
+      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
         <wpml:droneEnumValue>${cam.droneId}</wpml:droneEnumValue>
@@ -3108,7 +3323,7 @@
     }
 
     // Default 20 Preloaded Missions
-    const DEFAULT_PRELOADED_MISSIONS = [{"name": "Mision 01 - Zocalo CDMX", "date": "02/10/2026 08:40", "points": [{"lat": 19.43413, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1310097}, {"lat": 19.431208, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1342923}], "altitude": 60, "speed": 6.0, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 02 - Bosque Chapultepec Castillo", "date": "02/10/2026 08:41", "points": [{"lat": 19.422525, "lng": -99.1819}, {"lat": 19.4212865, "lng": -99.1790071}, {"lat": 19.4188359, "lng": -99.1806951}, {"lat": 19.4192426, "lng": -99.1827916}, {"lat": 19.4211712, "lng": -99.1844166}], "altitude": 80, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 03 - Canales Xochimilco Cuemanco", "date": "02/10/2026 08:42", "points": [{"lat": 19.281475, "lng": -99.0987}, {"lat": 19.2805081, "lng": -99.0950152}, {"lat": 19.2771467, "lng": -99.0962167}, {"lat": 19.2764971, "lng": -99.0987}, {"lat": 19.2767531, "lng": -99.1019055}, {"lat": 19.2804067, "lng": -99.1021987}], "altitude": 90, "speed": 9.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 04 - Piramides Teotihuacan Sol", "date": "02/10/2026 08:43", "points": [{"lat": 19.6959, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8388249}, {"lat": 19.6894066, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8461312}], "altitude": 120, "speed": 11.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 05 - Ciudad Universitaria Estadio", "date": "02/10/2026 08:44", "points": [{"lat": 19.33535, "lng": -99.1923}, {"lat": 19.3352342, "lng": -99.1897203}, {"lat": 19.3328, "lng": -99.1898413}, {"lat": 19.3315861, "lng": -99.1910135}, {"lat": 19.3298053, "lng": -99.1923}, {"lat": 19.3304887, "lng": -99.1947494}, {"lat": 19.3328, "lng": -99.1943349}, {"lat": 19.3342097, "lng": -99.193794}], "altitude": 75, "speed": 7.0, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 06 - Centro Coyoacan Jardin Hidalgo", "date": "02/10/2026 08:45", "points": [{"lat": 19.350975, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1605757}, {"lat": 19.34854, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1633098}], "altitude": 50, "speed": 5.0, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 07 - Santa Fe Centro Financiero", "date": "02/10/2026 08:46", "points": [{"lat": 19.36528, "lng": -99.2618}, {"lat": 19.3638929, "lng": -99.2585611}, {"lat": 19.3611482, "lng": -99.2604509}, {"lat": 19.3616037, "lng": -99.2627983}, {"lat": 19.3637637, "lng": -99.2646176}], "altitude": 100, "speed": 10.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 08 - Polanco Paseo de la Reforma", "date": "02/10/2026 08:47", "points": [{"lat": 19.43027, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.1974231}, {"lat": 19.4266987, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.201435}], "altitude": 70, "speed": 7.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 09 - Tlatelolco Tres Culturas", "date": "02/10/2026 08:48", "points": [{"lat": 19.4534, "lng": -99.1374}, {"lat": 19.4528475, "lng": -99.1352922}, {"lat": 19.4509267, "lng": -99.1359795}, {"lat": 19.4505555, "lng": -99.1374}, {"lat": 19.4507018, "lng": -99.1392337}, {"lat": 19.4527895, "lng": -99.1394014}], "altitude": 65, "speed": 6.5, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 10 - Basilica Guadalupe Atrio", "date": "02/10/2026 08:49", "points": [{"lat": 19.48664, "lng": -99.1176}, {"lat": 19.485451, "lng": -99.1148217}, {"lat": 19.4830985, "lng": -99.1164428}, {"lat": 19.4834889, "lng": -99.1184563}, {"lat": 19.4853403, "lng": -99.1200169}], "altitude": 85, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 11 - Cuautitlan Izcalli Lago Pajaros", "date": "02/10/2026 08:50", "points": [{"lat": 19.66143, "lng": -99.2154}, {"lat": 19.6595475, "lng": -99.2109963}, {"lat": 19.6558226, "lng": -99.2135658}, {"lat": 19.6564407, "lng": -99.2167573}, {"lat": 19.6593722, "lng": -99.2192309}], "altitude": 110, "speed": 12.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 12 - Naucalpan Parque Naucalli", "date": "02/10/2026 08:51", "points": [{"lat": 19.50022, "lng": -99.2392}, {"lat": 19.4997895, "lng": -99.2361545}, {"lat": 19.4969493, "lng": -99.2366406}, {"lat": 19.4958501, "lng": -99.2383571}, {"lat": 19.494622, "lng": -99.2406703}, {"lat": 19.4967242, "lng": -99.2428059}, {"lat": 19.498777, "lng": -99.2408987}], "altitude": 80, "speed": 8.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 13 - Ecatepec Parque Ecologico", "date": "02/10/2026 08:52", "points": [{"lat": 19.59267, "lng": -99.0432}, {"lat": 19.5915097, "lng": -99.0387698}, {"lat": 19.587476, "lng": -99.0402143}, {"lat": 19.5866965, "lng": -99.0432}, {"lat": 19.5870037, "lng": -99.0470539}, {"lat": 19.591388, "lng": -99.0474065}], "altitude": 130, "speed": 13.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 14 - Ciudad Neza Estadio Metropolitano", "date": "02/10/2026 08:53", "points": [{"lat": 19.40241, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0113369}, {"lat": 19.3981893, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0160774}], "altitude": 55, "speed": 6.0, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 15 - Desierto de los Leones Monasterio", "date": "02/10/2026 08:54", "points": [{"lat": 19.316775, "lng": -99.3082}, {"lat": 19.3150411, "lng": -99.3041525}, {"lat": 19.3116102, "lng": -99.3065142}, {"lat": 19.3121796, "lng": -99.3094475}, {"lat": 19.3148796, "lng": -99.311721}], "altitude": 95, "speed": 9.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 16 - Ajusco Volcan San Miguel", "date": "02/10/2026 08:55", "points": [{"lat": 19.21235, "lng": -99.2562}, {"lat": 19.2109687, "lng": -99.2509383}, {"lat": 19.2061667, "lng": -99.2526539}, {"lat": 19.2052387, "lng": -99.2562}, {"lat": 19.2056044, "lng": -99.2607773}, {"lat": 19.2108239, "lng": -99.261196}], "altitude": 150, "speed": 14.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 17 - La Marquesa Valles", "date": "02/10/2026 08:56", "points": [{"lat": 19.310325, "lng": -99.3621}, {"lat": 19.3080957, "lng": -99.3568963}, {"lat": 19.3036846, "lng": -99.3599326}, {"lat": 19.3044167, "lng": -99.3637038}, {"lat": 19.3078881, "lng": -99.3666268}], "altitude": 125, "speed": 12.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 18 - Iztapalapa Cerro de la Estrella", "date": "02/10/2026 08:57", "points": [{"lat": 19.346005, "lng": -99.0912}, {"lat": 19.345561, "lng": -99.0880623}, {"lat": 19.3426321, "lng": -99.0885631}, {"lat": 19.3414986, "lng": -99.0903316}, {"lat": 19.3402321, "lng": -99.0927148}, {"lat": 19.3423999, "lng": -99.0949151}, {"lat": 19.3445169, "lng": -99.0929501}], "altitude": 75, "speed": 7.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 19 - Valle de Bravo Lago Marina", "date": "02/10/2026 08:58", "points": [{"lat": 19.19828, "lng": -100.1345}, {"lat": 19.196954, "lng": -100.1294492}, {"lat": 19.192344, "lng": -100.1310961}, {"lat": 19.1914532, "lng": -100.1345}, {"lat": 19.1918042, "lng": -100.1388938}, {"lat": 19.1968149, "lng": -100.1392958}], "altitude": 140, "speed": 15.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 20 - Tepotzotlan Arcos del Sitio", "date": "02/10/2026 08:59", "points": [{"lat": 19.7516, "lng": -99.3921}, {"lat": 19.7514456, "lng": -99.3886516}, {"lat": 19.7482, "lng": -99.3888134}, {"lat": 19.7465814, "lng": -99.3903803}, {"lat": 19.7442071, "lng": -99.3921}, {"lat": 19.7451183, "lng": -99.3953743}, {"lat": 19.7482, "lng": -99.3948201}, {"lat": 19.7500797, "lng": -99.3940971}], "altitude": 105, "speed": 10.5, "camera": "DJI_AIR_3S", "locked": true}];
+    const DEFAULT_PRELOADED_MISSIONS = [{"name": "Mision 01 - Zocalo CDMX", "date": "02/10/2026 08:40", "points": [{"lat": 19.43413, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1310097}, {"lat": 19.431208, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1342923}], "altitude": 60, "speed": 6.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 02 - Bosque Chapultepec Castillo", "date": "02/10/2026 08:41", "points": [{"lat": 19.422525, "lng": -99.1819}, {"lat": 19.4212865, "lng": -99.1790071}, {"lat": 19.4188359, "lng": -99.1806951}, {"lat": 19.4192426, "lng": -99.1827916}, {"lat": 19.4211712, "lng": -99.1844166}], "altitude": 80, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 03 - Canales Xochimilco Cuemanco", "date": "02/10/2026 08:42", "points": [{"lat": 19.281475, "lng": -99.0987}, {"lat": 19.2805081, "lng": -99.0950152}, {"lat": 19.2771467, "lng": -99.0962167}, {"lat": 19.2764971, "lng": -99.0987}, {"lat": 19.2767531, "lng": -99.1019055}, {"lat": 19.2804067, "lng": -99.1021987}], "altitude": 90, "speed": 9.5, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 04 - Piramides Teotihuacan Sol", "date": "02/10/2026 08:43", "points": [{"lat": 19.6959, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8388249}, {"lat": 19.6894066, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8461312}], "altitude": 120, "speed": 11.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 05 - Ciudad Universitaria Estadio", "date": "02/10/2026 08:44", "points": [{"lat": 19.33535, "lng": -99.1923}, {"lat": 19.3352342, "lng": -99.1897203}, {"lat": 19.3328, "lng": -99.1898413}, {"lat": 19.3315861, "lng": -99.1910135}, {"lat": 19.3298053, "lng": -99.1923}, {"lat": 19.3304887, "lng": -99.1947494}, {"lat": 19.3328, "lng": -99.1943349}, {"lat": 19.3342097, "lng": -99.193794}], "altitude": 75, "speed": 7.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 06 - Centro Coyoacan Jardin Hidalgo", "date": "02/10/2026 08:45", "points": [{"lat": 19.350975, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1605757}, {"lat": 19.34854, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1633098}], "altitude": 50, "speed": 5.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 07 - Santa Fe Centro Financiero", "date": "02/10/2026 08:46", "points": [{"lat": 19.36528, "lng": -99.2618}, {"lat": 19.3638929, "lng": -99.2585611}, {"lat": 19.3611482, "lng": -99.2604509}, {"lat": 19.3616037, "lng": -99.2627983}, {"lat": 19.3637637, "lng": -99.2646176}], "altitude": 100, "speed": 10.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 08 - Polanco Paseo de la Reforma", "date": "02/10/2026 08:47", "points": [{"lat": 19.43027, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.1974231}, {"lat": 19.4266987, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.201435}], "altitude": 70, "speed": 7.5, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 09 - Tlatelolco Tres Culturas", "date": "02/10/2026 08:48", "points": [{"lat": 19.4534, "lng": -99.1374}, {"lat": 19.4528475, "lng": -99.1352922}, {"lat": 19.4509267, "lng": -99.1359795}, {"lat": 19.4505555, "lng": -99.1374}, {"lat": 19.4507018, "lng": -99.1392337}, {"lat": 19.4527895, "lng": -99.1394014}], "altitude": 65, "speed": 6.5, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 10 - Basilica Guadalupe Atrio", "date": "02/10/2026 08:49", "points": [{"lat": 19.48664, "lng": -99.1176}, {"lat": 19.485451, "lng": -99.1148217}, {"lat": 19.4830985, "lng": -99.1164428}, {"lat": 19.4834889, "lng": -99.1184563}, {"lat": 19.4853403, "lng": -99.1200169}], "altitude": 85, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 11 - Cuautitlan Izcalli Lago Pajaros", "date": "02/10/2026 08:50", "points": [{"lat": 19.66143, "lng": -99.2154}, {"lat": 19.6595475, "lng": -99.2109963}, {"lat": 19.6558226, "lng": -99.2135658}, {"lat": 19.6564407, "lng": -99.2167573}, {"lat": 19.6593722, "lng": -99.2192309}], "altitude": 110, "speed": 12.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 12 - Naucalpan Parque Naucalli", "date": "02/10/2026 08:51", "points": [{"lat": 19.50022, "lng": -99.2392}, {"lat": 19.4997895, "lng": -99.2361545}, {"lat": 19.4969493, "lng": -99.2366406}, {"lat": 19.4958501, "lng": -99.2383571}, {"lat": 19.494622, "lng": -99.2406703}, {"lat": 19.4967242, "lng": -99.2428059}, {"lat": 19.498777, "lng": -99.2408987}], "altitude": 80, "speed": 8.5, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 13 - Ecatepec Parque Ecologico", "date": "02/10/2026 08:52", "points": [{"lat": 19.59267, "lng": -99.0432}, {"lat": 19.5915097, "lng": -99.0387698}, {"lat": 19.587476, "lng": -99.0402143}, {"lat": 19.5866965, "lng": -99.0432}, {"lat": 19.5870037, "lng": -99.0470539}, {"lat": 19.591388, "lng": -99.0474065}], "altitude": 130, "speed": 13.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 14 - Ciudad Neza Estadio Metropolitano", "date": "02/10/2026 08:53", "points": [{"lat": 19.40241, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0113369}, {"lat": 19.3981893, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0160774}], "altitude": 55, "speed": 6.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 15 - Desierto de los Leones Monasterio", "date": "02/10/2026 08:54", "points": [{"lat": 19.316775, "lng": -99.3082}, {"lat": 19.3150411, "lng": -99.3041525}, {"lat": 19.3116102, "lng": -99.3065142}, {"lat": 19.3121796, "lng": -99.3094475}, {"lat": 19.3148796, "lng": -99.311721}], "altitude": 95, "speed": 9.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 16 - Ajusco Volcan San Miguel", "date": "02/10/2026 08:55", "points": [{"lat": 19.21235, "lng": -99.2562}, {"lat": 19.2109687, "lng": -99.2509383}, {"lat": 19.2061667, "lng": -99.2526539}, {"lat": 19.2052387, "lng": -99.2562}, {"lat": 19.2056044, "lng": -99.2607773}, {"lat": 19.2108239, "lng": -99.261196}], "altitude": 150, "speed": 14.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 17 - La Marquesa Valles", "date": "02/10/2026 08:56", "points": [{"lat": 19.310325, "lng": -99.3621}, {"lat": 19.3080957, "lng": -99.3568963}, {"lat": 19.3036846, "lng": -99.3599326}, {"lat": 19.3044167, "lng": -99.3637038}, {"lat": 19.3078881, "lng": -99.3666268}], "altitude": 125, "speed": 12.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 18 - Iztapalapa Cerro de la Estrella", "date": "02/10/2026 08:57", "points": [{"lat": 19.346005, "lng": -99.0912}, {"lat": 19.345561, "lng": -99.0880623}, {"lat": 19.3426321, "lng": -99.0885631}, {"lat": 19.3414986, "lng": -99.0903316}, {"lat": 19.3402321, "lng": -99.0927148}, {"lat": 19.3423999, "lng": -99.0949151}, {"lat": 19.3445169, "lng": -99.0929501}], "altitude": 75, "speed": 7.5, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 19 - Valle de Bravo Lago Marina", "date": "02/10/2026 08:58", "points": [{"lat": 19.19828, "lng": -100.1345}, {"lat": 19.196954, "lng": -100.1294492}, {"lat": 19.192344, "lng": -100.1310961}, {"lat": 19.1914532, "lng": -100.1345}, {"lat": 19.1918042, "lng": -100.1388938}, {"lat": 19.1968149, "lng": -100.1392958}], "altitude": 140, "speed": 15.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 20 - Tepotzotlan Arcos del Sitio", "date": "02/10/2026 08:59", "points": [{"lat": 19.7516, "lng": -99.3921}, {"lat": 19.7514456, "lng": -99.3886516}, {"lat": 19.7482, "lng": -99.3888134}, {"lat": 19.7465814, "lng": -99.3903803}, {"lat": 19.7442071, "lng": -99.3921}, {"lat": 19.7451183, "lng": -99.3953743}, {"lat": 19.7482, "lng": -99.3948201}, {"lat": 19.7500797, "lng": -99.3940971}], "altitude": 105, "speed": 10.5, "camera": "DJI_AIR_3S", "locked": true}];
 
     function ensureInitialMissions() {
       try {
@@ -3121,10 +3336,12 @@
           existing = DEFAULT_PRELOADED_MISSIONS;
           localStorage.setItem('saved_missions', JSON.stringify(existing));
         }
-        // Ensure all have locked property
+        // Ensure all have locked property and Air 3S default
         existing.forEach(m => {
           if (typeof m.locked === 'undefined') m.locked = true;
+          m.camera = 'DJI_AIR_3S';
         });
+        localStorage.setItem('saved_missions', JSON.stringify(existing));
         AppState.savedMissions = existing;
         if (typeof renderMissionsList === 'function') {
           renderMissionsList();
@@ -3309,6 +3526,7 @@ function renderDeviceSlots(){
           +'<div class="msub guid-txt">GUID: '+esc(shortGuid(slot.guid))+'</div>'
         +'</div>'
         +'<div class="mact">'
+          +'<button class="btn-sync-direct" title="⚡ Sobreescribir esta ranura del RC 2 con la misión seleccionada" onclick="directOverwriteSlot(\''+esc(slot.guid)+'\', event)">⚡</button>'
           +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openDeviceSlotInGoogleEarth(\''+esc(slot.guid)+'\', event)">🌍</button>'
           +'<button class="btn-del" title="Eliminar del RC 2" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
         +'</div>'
@@ -3384,6 +3602,7 @@ function renderLocalMissions(){
           +'<div class="msub">'+esc(tag)+' · '+relTime(m.dateModified)+' · '+wp+'</div>'
         +'</div>'
         +'<div class="mact">'
+          +'<button class="btn-sync-direct" title="⚡ Transferir o sobreescribir al RC 2" onclick="directSyncLocalMission(\''+esc(m.name)+'\', event)">⚡</button>'
           +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openMissionInGoogleEarth(\''+esc(m.name)+'\', event)">🌍</button>'
           +'<button class="btn-del" title="Eliminar del celular" onclick="deleteLocalMissionItem(\''+esc(m.name)+'\', event)">🗑️</button>'
         +'</div>'
