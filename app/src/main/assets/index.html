@@ -1086,16 +1086,60 @@ function directSyncLocalMission(mName, e) {
     /* Custom Leaflet Map styling */
     .leaflet-bar { border: none !important; box-shadow: var(--shadow-md) !important; }
     .custom-vertex-icon {
+      background: transparent !important;
+      border: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: grab !important;
+      touch-action: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+    }
+    .custom-vertex-icon .vertex-dot {
+      width: 18px;
+      height: 18px;
       background: #ffffff;
-      border: 3px solid #7c4dff;
+      border: 3.5px solid #7c4dff;
       border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      pointer-events: none;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .custom-vertex-icon:hover .vertex-dot, .custom-vertex-icon:active .vertex-dot {
+      transform: scale(1.35);
+      border-color: #00e5ff;
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.85);
     }
     .custom-midpoint-icon {
-      background: #d8ccf8;
+      background: transparent !important;
+      border: none !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      touch-action: none !important;
+    }
+    .custom-midpoint-icon .midpoint-dot {
+      width: 14px;
+      height: 14px;
+      background: #c4b5fd;
       border: 2px solid #7c4dff;
       border-radius: 50%;
-      opacity: 0.85;
+      color: #3b0764;
+      font-size: 11px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+      pointer-events: none;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .custom-midpoint-icon:hover .midpoint-dot, .custom-midpoint-icon:active .midpoint-dot {
+      transform: scale(1.3);
+      background: #a78bfa;
+      color: #fff;
     }
     .alt-label-tooltip {
       background: rgba(15, 23, 42, 0.90) !important;
@@ -2542,8 +2586,9 @@ function directSyncLocalMission(mName, e) {
       loadSavedMissionsFromStorage();
       ensureInitialMissions();
       updateSensorResolutionUI();
-      if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
-      seedInitialPolygon(defaultCenter);
+      if (AppState.savedMissions && AppState.savedMissions.length > 0 && AppState.currentMissionIdx === null) {
+        loadMission(0);
+      }
     }
 
     function seedInitialPolygon(center) {
@@ -2750,9 +2795,9 @@ function directSyncLocalMission(mName, e) {
       const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
       if (cur && cur.locked !== false) {
         if (window.AndroidBridge && window.AndroidBridge.showToast) {
-          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Toca el candado [🔒] para modificar.');
+          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Toca el candado [🔒] en la lista para modificar.');
         } else {
-          alert('🔒 Misión protegida con candado. Toca el candado [🔒] para modificar.');
+          alert('🔒 Misión protegida con candado. Toca el candado [🔒] en la lista para modificar.');
         }
         return;
       }
@@ -2760,24 +2805,15 @@ function directSyncLocalMission(mName, e) {
       renderBoundary();
       recalculateMission();
 
-      // Auto-guardado en tiempo real en la misión activa
+      // Auto-guardado en tiempo real en la misión activa (sin bloquear con candado)
       if (cur) {
         cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
         cur.altitude = AppState.altitude;
         cur.speed = AppState.speed;
         cur.camera = AppState.camera;
+        cur.sensorResolution = AppState.sensorResolution;
         cur.gridAngle = AppState.gridAngle || 0;
         cur.mode = AppState.mode || 'Area';
-
-        const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
-        if (AppState.points.length >= minPts && !cur.autoLockedOnce) {
-          cur.locked = true;
-          cur.autoLockedOnce = true;
-          autoExportCurrentMissionKmz();
-          if (window.AndroidBridge && window.AndroidBridge.showToast) {
-            window.AndroidBridge.showToast("🔒 Misión '" + cur.name + "' guardada y lista para RC 2");
-          }
-        }
         localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
         renderMissionsList();
         updateMissionHeaderBar();
@@ -2818,61 +2854,109 @@ function directSyncLocalMission(mName, e) {
       updateStatDisplay(0, 0, 0, 0);
     }
 
+    let activeBoundaryShape = null;
+
     function renderBoundary() {
       polygonLayer.clearLayers();
       markersLayer.clearLayers();
+      activeBoundaryShape = null;
 
       const pts = AppState.points;
       updatePointBadge();
 
       if (pts.length < 2) return;
 
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      const isLocked = cur && cur.locked !== false;
+
+      // 1. DIBUJAR POLÍGONO O LÍNEA (interactive: false para que los toques pasen directo a los vértices)
       if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
-        L.polyline(pts, {
+        activeBoundaryShape = L.polyline(pts, {
           color: '#1e88e5',
           weight: 4,
-          lineJoin: 'round'
+          lineJoin: 'round',
+          interactive: false
         }).addTo(polygonLayer);
       } else if (pts.length >= 3) {
-        L.polygon(pts, {
+        activeBoundaryShape = L.polygon(pts, {
           color: '#7c4dff',
           weight: 3,
           fillColor: '#7c4dff',
           fillOpacity: 0.15,
-          lineJoin: 'round'
+          lineJoin: 'round',
+          interactive: false
         }).addTo(polygonLayer);
       } else {
-        L.polyline(pts, {
+        activeBoundaryShape = L.polyline(pts, {
           color: '#7c4dff',
           weight: 3,
-          dashArray: '6, 6'
+          dashArray: '6, 6',
+          interactive: false
         }).addTo(polygonLayer);
       }
 
-      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
-      const isLocked = cur && cur.locked !== false;
-
+      // 2. VÉRTICES ARRASTRABLES Y EDITABLES
       pts.forEach((pt, idx) => {
         const marker = L.marker(pt, {
           draggable: !isLocked,
           icon: L.divIcon({
             className: 'custom-vertex-icon',
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            html: '<div class="vertex-dot"></div>'
           })
         }).addTo(markersLayer);
 
         if (!isLocked) {
+          // Arrastre fluido: actualiza la forma visual sin destruir los marcadores en tiempo real
+          marker.on('dragstart', function(e) {
+            if (e.originalEvent) {
+              L.DomEvent.stopPropagation(e.originalEvent);
+            }
+          });
+
           marker.on('drag', function(e) {
+            AppState.points[idx] = e.target.getLatLng();
+            if (activeBoundaryShape) {
+              activeBoundaryShape.setLatLngs(AppState.points);
+            }
+          });
+
+          marker.on('dragend', function(e) {
             AppState.points[idx] = e.target.getLatLng();
             renderBoundary();
             recalculateMission();
+            if (cur) {
+              cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+              localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+            }
+          });
+
+          // Tocar un vértice para opciones de eliminación si hay puntos de sobra
+          marker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
+            if (AppState.points.length > minPts) {
+              if (confirm(`¿Eliminar el punto #${idx + 1} del polígono?`)) {
+                AppState.points.splice(idx, 1);
+                renderBoundary();
+                recalculateMission();
+                if (cur) {
+                  cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+                  localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+                }
+              }
+            }
           });
         }
       });
 
-      if (pts.length >= 3 && AppState.mode !== 'Lineal' && AppState.mode !== 'Corridor' && !isLocked) {
-        for (let i = 0; i < pts.length; i++) {
+      // 3. PUNTOS MEDIOS PARA INSERTAR NUEVOS VÉRTICES
+      if (!isLocked) {
+        const isClosed = (AppState.mode !== 'Lineal' && AppState.mode !== 'Corridor' && pts.length >= 3);
+        const segmentCount = isClosed ? pts.length : (pts.length - 1);
+
+        for (let i = 0; i < segmentCount; i++) {
           const nextIdx = (i + 1) % pts.length;
           const midLat = (pts[i].lat + pts[nextIdx].lat) / 2;
           const midLng = (pts[i].lng + pts[nextIdx].lng) / 2;
@@ -2881,26 +2965,36 @@ function directSyncLocalMission(mName, e) {
           const midMarker = L.marker(midPoint, {
             icon: L.divIcon({
               className: 'custom-midpoint-icon',
-              iconSize: [10, 10],
-              iconAnchor: [5, 5]
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              html: '<div class="midpoint-dot">+</div>'
             })
           }).addTo(markersLayer);
 
-          midMarker.on('click', function() {
+          midMarker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
             AppState.points.splice(i + 1, 0, midPoint);
             renderBoundary();
             recalculateMission();
+            if (cur) {
+              cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+              localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+            }
           });
         }
 
-        const center = calculateCentroid(pts);
-        L.marker(center, {
-          icon: L.divIcon({
-            className: 'custom-takeoff-icon',
-            iconSize: [22, 22],
-            iconAnchor: [11, 11]
-          })
-        }).addTo(markersLayer);
+        // Centroide de despegue
+        if (isClosed) {
+          const center = calculateCentroid(pts);
+          L.marker(center, {
+            interactive: false,
+            icon: L.divIcon({
+              className: 'custom-takeoff-icon',
+              iconSize: [22, 22],
+              iconAnchor: [11, 11]
+            })
+          }).addTo(markersLayer);
+        }
       }
     }
 
@@ -3270,9 +3364,27 @@ function directSyncLocalMission(mName, e) {
       const expScreen = document.getElementById('export-screen');
 
       if (viewName === 'map') {
+        const wasInConfig = viewCfg && viewCfg.classList.contains('active');
         if (viewMap) viewMap.classList.add('active');
         if (viewCfg) viewCfg.classList.remove('active');
         if (expScreen) expScreen.classList.remove('active');
+
+        // El candado solo se activa al volver al mapa desde parámetros si el vuelo ya tiene sus puntos listos
+        if (wasInConfig && AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) {
+          const cur = AppState.savedMissions[AppState.currentMissionIdx];
+          const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
+          if (cur && AppState.points.length >= minPts) {
+            cur.locked = true;
+            localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+            renderMissionsList();
+            renderBoundary();
+            updateLockStatusBadge();
+            autoExportCurrentMissionKmz();
+            if (window.AndroidBridge && window.AndroidBridge.showToast) {
+              window.AndroidBridge.showToast("🔒 Misión '" + cur.name + "' asegurada con candado.");
+            }
+          }
+        }
       } else if (viewName === 'config') {
         if (viewMap) viewMap.classList.remove('active');
         if (viewCfg) viewCfg.classList.add('active');
