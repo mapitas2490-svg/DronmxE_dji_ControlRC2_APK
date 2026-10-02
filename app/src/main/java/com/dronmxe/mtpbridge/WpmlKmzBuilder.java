@@ -219,10 +219,26 @@ public class WpmlKmzBuilder {
         if (inputFile == null || !inputFile.exists()) return inputFile;
 
         try {
-            List<Waypoint> waypoints = extractWaypoints(inputFile);
-            if (waypoints.isEmpty()) {
-                logW(TAG, "No se encontraron waypoints para buildPureDjiKmz en " + inputFile.getName());
-                return inputFile;
+            byte[] origTemplateBytes = null;
+            byte[] origWaylinesBytes = null;
+            boolean origWaylinesValid = false;
+
+            if (inputFile.getName().toLowerCase().endsWith(".kmz")) {
+                try (ZipInputStream zis = new ZipInputStream(new FileInputStream(inputFile))) {
+                    ZipEntry entry;
+                    while ((entry = zis.getNextEntry()) != null) {
+                        String name = entry.getName().toLowerCase();
+                        if (name.contains("waylines.wpml")) {
+                            origWaylinesBytes = readAllBytes(zis);
+                            String content = new String(origWaylinesBytes, StandardCharsets.UTF_8);
+                            if (content.contains("<Placemark>") && content.contains("<coordinates>")) {
+                                origWaylinesValid = true;
+                            }
+                        } else if (name.contains("template.kml")) {
+                            origTemplateBytes = readAllBytes(zis);
+                        }
+                    }
+                }
             }
 
             String safeName = (missionName != null && !missionName.trim().isEmpty()) ?
@@ -230,13 +246,57 @@ public class WpmlKmzBuilder {
                     inputFile.getName().replace(".kmz", "").replace(".kml", "");
 
             File targetKmz = File.createTempFile("pure_dji_", ".kmz", outputDir);
-            String templateXml = generateTemplateKml(safeName, waypoints);
-            String waylinesXml = generateWaylinesWpml(safeName, waypoints);
+
+            byte[] finalTemplateBytes;
+            byte[] finalWaylinesBytes;
+
+            if (origWaylinesValid && origWaylinesBytes != null) {
+                // Conservar las waylines originales completas (con sus acciones de cámara, alturas y velocidades originales)
+                String wStr = new String(origWaylinesBytes, StandardCharsets.UTF_8);
+                if (wStr.contains("<wpml:missionName>")) {
+                    wStr = wStr.replaceAll("<wpml:missionName>[\\s\\S]*?</wpml:missionName>",
+                            "<wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>");
+                } else if (wStr.contains("<Folder>")) {
+                    wStr = wStr.replace("<Folder>", "<Folder>\n      <wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>");
+                }
+                finalWaylinesBytes = wStr.getBytes(StandardCharsets.UTF_8);
+
+                if (origTemplateBytes != null && origTemplateBytes.length > 0) {
+                    String tStr = new String(origTemplateBytes, StandardCharsets.UTF_8);
+                    if (tStr.contains("<wpml:missionName>")) {
+                        tStr = tStr.replaceAll("<wpml:missionName>[\\s\\S]*?</wpml:missionName>",
+                                "<wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>");
+                    } else if (tStr.contains("<Folder>")) {
+                        tStr = tStr.replace("<Folder>", "<Folder>\n      <wpml:templateType>waypoint</wpml:templateType>\n      <wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>");
+                    } else if (tStr.contains("</Document>")) {
+                        String folderBlock = "    <Folder>\n" +
+                                             "      <wpml:templateType>waypoint</wpml:templateType>\n" +
+                                             "      <wpml:templateId>0</wpml:templateId>\n" +
+                                             "      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n" +
+                                             "      <wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>\n" +
+                                             "    </Folder>\n" +
+                                             "  </Document>";
+                        tStr = tStr.replace("</Document>", folderBlock);
+                    }
+                    finalTemplateBytes = tStr.getBytes(StandardCharsets.UTF_8);
+                } else {
+                    List<Waypoint> waypoints = extractWaypoints(inputFile);
+                    finalTemplateBytes = generateTemplateKml(safeName, waypoints).getBytes(StandardCharsets.UTF_8);
+                }
+            } else {
+                List<Waypoint> waypoints = extractWaypoints(inputFile);
+                if (waypoints.isEmpty()) {
+                    logW(TAG, "No se encontraron waypoints para buildPureDjiKmz en " + inputFile.getName());
+                    return inputFile;
+                }
+                finalTemplateBytes = generateTemplateKml(safeName, waypoints).getBytes(StandardCharsets.UTF_8);
+                finalWaylinesBytes = generateWaylinesWpml(safeName, waypoints).getBytes(StandardCharsets.UTF_8);
+            }
 
             try (FileOutputStream fos = new FileOutputStream(targetKmz);
                  ZipOutputStream zos = new ZipOutputStream(fos)) {
 
-                // Entry 1: wpmz/ (directorio requerido)
+                // Entry 1: wpmz/ (directorio requerido por DJI Fly)
                 ZipEntry entryDir = new ZipEntry("wpmz/");
                 zos.putNextEntry(entryDir);
                 zos.closeEntry();
@@ -244,19 +304,19 @@ public class WpmlKmzBuilder {
                 // Entry 2: wpmz/template.kml
                 ZipEntry entryTemplate = new ZipEntry("wpmz/template.kml");
                 zos.putNextEntry(entryTemplate);
-                zos.write(templateXml.getBytes(StandardCharsets.UTF_8));
+                zos.write(finalTemplateBytes);
                 zos.closeEntry();
 
                 // Entry 3: wpmz/waylines.wpml
                 ZipEntry entryWaylines = new ZipEntry("wpmz/waylines.wpml");
                 zos.putNextEntry(entryWaylines);
-                zos.write(waylinesXml.getBytes(StandardCharsets.UTF_8));
+                zos.write(finalWaylinesBytes);
                 zos.closeEntry();
 
                 zos.finish();
             }
 
-            logD(TAG, "✅ Paquete Pure DJI KMZ generado exitosamente: " + targetKmz.getAbsolutePath() + " (" + waypoints.size() + " WP)");
+            logD(TAG, "✅ Paquete Pure DJI KMZ generado exitosamente: " + targetKmz.getAbsolutePath());
             return targetKmz;
 
         } catch (Exception e) {
@@ -446,6 +506,7 @@ public class WpmlKmzBuilder {
 
     public static String generateTemplateKml(String missionName, List<Waypoint> waypoints) {
         long now = System.currentTimeMillis();
+        String safeName = (missionName != null && !missionName.trim().isEmpty()) ? escapeXml(missionName.trim()) : "Misión dronmxE";
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                "<kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:wpml=\"http://www.dji.com/wpmz/1.0.6\">\n" +
                "  <Document>\n" +
@@ -464,6 +525,12 @@ public class WpmlKmzBuilder {
                "        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>\n" +
                "      </wpml:droneInfo>\n" +
                "    </wpml:missionConfig>\n" +
+               "    <Folder>\n" +
+               "      <wpml:templateType>waypoint</wpml:templateType>\n" +
+               "      <wpml:templateId>0</wpml:templateId>\n" +
+               "      <wpml:autoFlightSpeed>8.0</wpml:autoFlightSpeed>\n" +
+               "      <wpml:missionName><![CDATA[" + safeName + "]]></wpml:missionName>\n" +
+               "    </Folder>\n" +
                "  </Document>\n" +
                "</kml>\n";
     }

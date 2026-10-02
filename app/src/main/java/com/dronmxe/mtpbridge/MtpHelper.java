@@ -28,6 +28,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -282,6 +284,7 @@ public class MtpHelper {
         public int folderHandle = -1;
         public int storageId = 0;
         public int wpCount = 0;
+        public List<double[]> coords = new ArrayList<>();
         public String base64 = "";
     }
 
@@ -418,7 +421,10 @@ public class MtpHelper {
                                         KmzParsedInfo pi = parseKmzFast(data);
                                         slot.wpCount = pi.wpCount;
                                         slot.displayName = pi.missionName;
-                                        slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+                                        slot.coords = pi.coords;
+                                        if (slot.coords.isEmpty()) {
+                                            slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+                                        }
                                     }
                                 }
                                 if (slot.displayName == null || slot.displayName.isEmpty()) slot.displayName = slot.guid;
@@ -436,8 +442,9 @@ public class MtpHelper {
             }
         } catch (Exception e) {
             callback.onLog("[ERR] Escaneo: " + e.getMessage());
+        } finally {
+            isScanning = false;
         }
-        isScanning = false;
         return slots;
     }
 
@@ -462,27 +469,68 @@ public class MtpHelper {
         return currentHandle;
     }
 
-    private KmzParsedInfo parseKmzFast(byte[] data) {
+    public KmzParsedInfo parseKmzFast(byte[] data) {
         KmzParsedInfo info = new KmzParsedInfo();
         try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(data))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 String name = entry.getName().toLowerCase();
-                if (name.endsWith(".wpml") || name.endsWith(".kml")) {
+                if (name.endsWith("waylines.wpml") || (info.wpCount == 0 && (name.endsWith(".wpml") || name.endsWith(".kml")))) {
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buf = new byte[4096]; int r;
                     while ((r = zis.read(buf)) != -1) baos.write(buf, 0, r);
                     String xml = baos.toString("UTF-8");
-                    int c = 0, i = 0;
-                    while ((i = xml.indexOf("<wpml:waypoint", i)) != -1) { c++; i += 14; }
-                    if (c == 0) { i = 0; while ((i = xml.indexOf("<Placemark", i)) != -1) { c++; i += 10; } }
-                    info.wpCount = Math.max(info.wpCount, c);
-                    if (info.missionName.isEmpty()) {
+
+                    if (info.missionName.isEmpty() || info.missionName.equalsIgnoreCase("Document")) {
                         int s = xml.indexOf("<wpml:missionName>");
                         if (s != -1) {
                             int e = xml.indexOf("</wpml:missionName>", s);
-                            if (e != -1) info.missionName = xml.substring(s + 18, e).replace("<![CDATA[", "").replace("]]>", "").trim();
+                            if (e != -1) {
+                                String n = xml.substring(s + 18, e).replace("<![CDATA[", "").replace("]]>", "").trim();
+                                if (!n.isEmpty()) info.missionName = n;
+                            }
                         }
+                    }
+                    if (info.missionName.isEmpty() || info.missionName.equalsIgnoreCase("Document")) {
+                        int s = xml.indexOf("<name>");
+                        if (s != -1) {
+                            int e = xml.indexOf("</name>", s);
+                            if (e != -1) {
+                                String n = xml.substring(s + 6, e).trim();
+                                if (!n.equalsIgnoreCase("wpmz") && !n.equalsIgnoreCase("Document") && !n.contains("Trayectoria")) {
+                                    info.missionName = n;
+                                }
+                            }
+                        }
+                    }
+
+                    List<double[]> pts = new ArrayList<>();
+                    int pStart = 0;
+                    while ((pStart = xml.indexOf("<Placemark", pStart)) != -1) {
+                        int pEnd = xml.indexOf("</Placemark>", pStart);
+                        if (pEnd == -1) break;
+                        int cStart = xml.indexOf("<coordinates>", pStart);
+                        if (cStart != -1 && cStart < pEnd) {
+                            int cEnd = xml.indexOf("</coordinates>", cStart);
+                            if (cEnd != -1 && cEnd <= pEnd) {
+                                String cText = xml.substring(cStart + 13, cEnd).trim();
+                                String[] tokens = cText.split("[,\\s]+");
+                                if (tokens.length >= 2) {
+                                    try {
+                                        double lon = Double.parseDouble(tokens[0].trim());
+                                        double lat = Double.parseDouble(tokens[1].trim());
+                                        if (!Double.isNaN(lon) && !Double.isNaN(lat) && (lon != 0.0 || lat != 0.0)) {
+                                            pts.add(new double[]{lon, lat});
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+                        pStart = pEnd + 12;
+                    }
+                    if (!pts.isEmpty()) {
+                        info.wpCount = pts.size();
+                        info.coords = pts;
                     }
                 }
             }
@@ -490,7 +538,11 @@ public class MtpHelper {
         return info;
     }
 
-    private static class KmzParsedInfo { int wpCount = 0; String missionName = ""; }
+    public static class KmzParsedInfo {
+        public int wpCount = 0;
+        public String missionName = "";
+        public List<double[]> coords = new ArrayList<>();
+    }
 
     public List<RemoteKmzFile> scanDownloadKmzFiles() {
         List<RemoteKmzFile> result = new ArrayList<>();
@@ -507,10 +559,18 @@ public class MtpHelper {
                     for (int fh : files) {
                         MtpObjectInfo fi = device.getObjectInfo(fh);
                         if (fi != null && fi.getName() != null && fi.getName().toLowerCase().endsWith(".kmz")) {
-                            RemoteKmzFile r = new RemoteKmzFile();
-                            r.name = fi.getName(); r.size = fi.getCompressedSize();
-                            r.dateModified = fi.getDateModified() * 1000L; r.handle = fh;
-                            result.add(r);
+                            boolean exists = false;
+                            for (RemoteKmzFile existing : result) {
+                                if (existing.name.equalsIgnoreCase(fi.getName())) {
+                                    exists = true; break;
+                                }
+                            }
+                            if (!exists) {
+                                RemoteKmzFile r = new RemoteKmzFile();
+                                r.name = fi.getName(); r.size = fi.getCompressedSize();
+                                r.dateModified = fi.getDateModified() * 1000L; r.handle = fh;
+                                result.add(r);
+                            }
                         }
                     }
                 }
@@ -521,15 +581,22 @@ public class MtpHelper {
 
     public static class RemoteKmzFile { public String name = ""; long size = 0; long dateModified = 0; int handle = -1; }
 
-    public String readSlotKmzBase64(int handle, int size) {
+    public byte[] readRemoteBytes(int handle, int size) {
         MtpDevice device; synchronized (mtpLock) { device = mtpDevice; }
-        if (device == null || handle <= 0) return "";
+        if (device == null || handle <= 0) return null;
         try {
-            if (size > 0 && size < 12000000) {
-                byte[] data = device.getObject(handle, size);
-                if (data != null) return android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+            if (size > 0 && size < 15000000) {
+                return device.getObject(handle, size);
             }
         } catch (Exception ignored) {}
+        return null;
+    }
+
+    public String readSlotKmzBase64(int handle, int size) {
+        byte[] data = readRemoteBytes(handle, size);
+        if (data != null && data.length > 0) {
+            return android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
+        }
         return "";
     }
 
@@ -567,17 +634,22 @@ public class MtpHelper {
                 }
             }
 
-            // Limpiar archivos anteriores en la carpeta del slot y detectar nombre previo
+            // Limpiar archivos anteriores en la carpeta del slot (KMZ anterior y previews viejas)
             int[] sub = device.getObjectHandles(storageId, 0, folderHandle);
             if (sub != null) {
                 for (int sh : sub) {
                     MtpObjectInfo subObj = device.getObjectInfo(sh);
-                    if (subObj != null && subObj.getName() != null && subObj.getName().toLowerCase().endsWith(".kmz")) {
-                        targetFileName = subObj.getName(); // Conservar nombre original si lo tenía
+                    if (subObj != null && subObj.getName() != null) {
+                        String sName = subObj.getName().toLowerCase();
+                        if (sName.endsWith(".kmz") || sName.endsWith(".jpg") || sName.endsWith(".png") || sName.endsWith(".tmp")) {
+                            device.deleteObject(sh);
+                        }
                     }
-                    device.deleteObject(sh);
                 }
             }
+
+            // El nombre del archivo KMZ dentro de la ranura DEBE ser el slotGuid + ".kmz" para que DJI Fly lo indexe
+            targetFileName = slotGuid.endsWith(".kmz") ? slotGuid : (slotGuid + ".kmz");
 
             // Inyectar el nuevo KMZ nativo DJI Fly
             MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
@@ -612,8 +684,9 @@ public class MtpHelper {
 
         File fileToSend = null;
         try {
+            String missionTitle = localFile.getName().replace(".kmz", "").replace(".kml", "");
             callback.onLog("[MTP] Empaquetando KMZ DJI Fly nativo (WPML 1.0.6) para: " + localFile.getName());
-            fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), slotGuid);
+            fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), missionTitle);
 
             int[] storageIds = device.getStorageIds();
             if (storageIds == null || storageIds.length == 0) {

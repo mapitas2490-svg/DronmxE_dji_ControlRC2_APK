@@ -210,7 +210,9 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
             }
 
-            File tempFile = new File(getCacheDir(), displayName);
+            File saveDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE");
+            if (!saveDir.exists()) saveDir.mkdirs();
+            File tempFile = new File(saveDir, displayName);
             try (InputStream in = getContentResolver().openInputStream(uri);
                  FileOutputStream out = new FileOutputStream(tempFile)) {
                 byte[] buffer = new byte[8192];
@@ -302,7 +304,16 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     obj.put("dateModified", s.dateModified);
                     obj.put("size", s.size);
                     obj.put("wpCount", s.wpCount);
-                    if (s.base64 != null && !s.base64.isEmpty()) {
+                    if (s.coords != null && !s.coords.isEmpty()) {
+                        JSONArray coordsArr = new JSONArray();
+                        for (double[] pt : s.coords) {
+                            JSONArray ptArr = new JSONArray();
+                            ptArr.put(pt[0]);
+                            ptArr.put(pt[1]);
+                            coordsArr.put(ptArr);
+                        }
+                        obj.put("coords", coordsArr);
+                    } else if (s.base64 != null && !s.base64.isEmpty()) {
                         obj.put("base64", s.base64);
                     }
                     arr.put(obj);
@@ -327,30 +338,58 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 synchronized (availableKmzFiles) {
                     availableKmzFiles.clear();
                     List<File> searchDirs = new ArrayList<>();
-                    searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
-                    searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE"));
-                    searchDirs.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS));
-                    searchDirs.add(new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "dronmxE"));
+                    File ext = Environment.getExternalStorageDirectory();
+                    File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    File doc = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
+
+                    searchDirs.add(dl);
+                    searchDirs.add(new File(dl, "dronmxE"));
+                    searchDirs.add(doc);
+                    searchDirs.add(new File(doc, "dronmxE"));
+                    searchDirs.add(new File(ext, "helpers"));
+                    searchDirs.add(new File(ext, "DJI"));
+                    searchDirs.add(new File(ext, "dronmxE"));
+                    searchDirs.add(new File(ext, ".waypoint"));
+                    searchDirs.add(getExternalFilesDir(null));
+                    searchDirs.add(new File("/sdcard/Download"));
+                    searchDirs.add(new File("/sdcard/Download/dronmxE"));
+                    searchDirs.add(new File("/sdcard/helpers"));
+                    searchDirs.add(new File("/sdcard/DJI"));
+                    searchDirs.add(new File("/sdcard/dronmxE"));
+                    searchDirs.add(new File("/sdcard/.waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/dji.go.v5/files/Waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/Waypoint"));
                     searchDirs.add(new File("/sdcard/Android/data/com.dji.industry.pilot/files/waypoint"));
 
                     for (File dir : searchDirs) {
-                        if (dir != null && dir.exists() && dir.isDirectory()) {
-                            File[] list = dir.listFiles((d, name) -> name != null && name.toLowerCase().endsWith(".kmz"));
-                            if (list != null) {
-                                for (File f : list) {
+                        if (dir == null || !dir.exists() || !dir.isDirectory()) continue;
+                        File[] list = dir.listFiles();
+                        if (list != null) {
+                            for (File f : list) {
+                                if (f.isFile() && f.getName().toLowerCase().endsWith(".kmz") && !f.getName().startsWith("pure_dji_") && !f.getName().startsWith("rc2_dl_")) {
                                     boolean duplicate = false;
                                     for (File existing : availableKmzFiles) {
                                         if (existing.getAbsolutePath().equalsIgnoreCase(f.getAbsolutePath()) ||
                                             (existing.getName().equalsIgnoreCase(f.getName()) && existing.length() == f.length())) {
-                                            duplicate = true;
-                                            break;
+                                            duplicate = true; break;
                                         }
                                     }
-                                    if (!duplicate) {
-                                        availableKmzFiles.add(f);
+                                    if (!duplicate) availableKmzFiles.add(f);
+                                } else if (f.isDirectory() && !f.getName().startsWith(".") && !f.getName().equalsIgnoreCase("cache")) {
+                                    // Escaneo 1 nivel adentro de subcarpetas
+                                    File[] subList = f.listFiles((d, name) -> name != null && name.toLowerCase().endsWith(".kmz") && !name.startsWith("pure_dji_") && !name.startsWith("rc2_dl_"));
+                                    if (subList != null) {
+                                        for (File sf : subList) {
+                                            boolean dup = false;
+                                            for (File existing : availableKmzFiles) {
+                                                if (existing.getAbsolutePath().equalsIgnoreCase(sf.getAbsolutePath()) ||
+                                                    (existing.getName().equalsIgnoreCase(sf.getName()) && existing.length() == sf.length())) {
+                                                    dup = true; break;
+                                                }
+                                            }
+                                            if (!dup) availableKmzFiles.add(sf);
+                                        }
                                     }
                                 }
                             }
@@ -369,7 +408,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                                     String path = cursor.getString(dataIdx);
                                     if (path != null) {
                                         File f = new File(path);
-                                        if (f.exists()) {
+                                        if (f.exists() && !f.getName().startsWith("pure_dji_") && !f.getName().startsWith("rc2_dl_")) {
                                             boolean dup = false;
                                             for (File existing : availableKmzFiles) {
                                                 if (existing.getName().equalsIgnoreCase(f.getName())) {
@@ -400,21 +439,21 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                             if (parent.equals("cache")) tag = "Compartido";
                             else if (parent.equalsIgnoreCase("Download")) tag = "Descargas";
                             else if (parent.equalsIgnoreCase("dronmxE")) tag = "dronmxE";
+                            else if (parent.equalsIgnoreCase("helpers")) tag = "helpers";
                             else tag = parent;
                         }
                         obj.put("tag", tag);
 
-                        if (f.length() < 3500000) {
-                            try (FileInputStream fis = new FileInputStream(f);
-                                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
-                                byte[] buffer = new byte[8192];
-                                int bytesRead;
-                                while ((bytesRead = fis.read(buffer)) != -1) {
-                                    baos.write(buffer, 0, bytesRead);
-                                }
-                                obj.put("base64", Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP));
-                            } catch (Exception ignored) {}
+                        List<WpmlKmzBuilder.Waypoint> wps = WpmlKmzBuilder.extractWaypoints(f);
+                        obj.put("wpCount", wps.size());
+                        JSONArray coordsArr = new JSONArray();
+                        for (WpmlKmzBuilder.Waypoint wp : wps) {
+                            JSONArray pt = new JSONArray();
+                            pt.put(wp.lon);
+                            pt.put(wp.lat);
+                            coordsArr.put(pt);
                         }
+                        obj.put("coords", coordsArr);
                         arr.put(obj);
                     }
 
@@ -437,9 +476,18 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                             obj.put("remoteHandle", rk.handle);
 
                             if (rk.size > 0 && rk.size < 3000000) {
-                                String b64 = mtpHelper.readSlotKmzBase64(rk.handle, (int) rk.size);
-                                if (b64 != null && !b64.isEmpty()) {
-                                    obj.put("base64", b64);
+                                byte[] data = mtpHelper.readRemoteBytes(rk.handle, (int) rk.size);
+                                if (data != null && data.length > 0) {
+                                    MtpHelper.KmzParsedInfo pi = mtpHelper.parseKmzFast(data);
+                                    obj.put("wpCount", pi.wpCount);
+                                    JSONArray cArr = new JSONArray();
+                                    for (double[] pt : pi.coords) {
+                                        JSONArray p = new JSONArray();
+                                        p.put(pt[0]);
+                                        p.put(pt[1]);
+                                        cArr.put(p);
+                                    }
+                                    obj.put("coords", cArr);
                                 }
                             }
                             arr.put(obj);
@@ -461,54 +509,171 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             }).start();
         }
 
+        private File resolveTargetKmzFile(String localFileNameOrPath) {
+            if (localFileNameOrPath == null || localFileNameOrPath.trim().isEmpty()) return null;
+            String clean = localFileNameOrPath.trim();
+
+            // 1. Ruta directa
+            File direct = new File(clean);
+            if (direct.exists() && direct.isFile()) return direct;
+
+            // 2. Buscar en availableKmzFiles
+            synchronized (availableKmzFiles) {
+                for (File f : availableKmzFiles) {
+                    if (f.getAbsolutePath().equalsIgnoreCase(clean) || f.getName().equalsIgnoreCase(clean)) {
+                        return f;
+                    }
+                }
+            }
+
+            // 3. Fallback exhaustivo de carpetas comunes
+            File ext = Environment.getExternalStorageDirectory();
+            File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File[] candidates = new File[]{
+                    new File(dl, clean),
+                    new File(new File(dl, "dronmxE"), clean),
+                    new File(new File(ext, "helpers"), clean),
+                    new File(new File(ext, "DJI"), clean),
+                    new File(new File(ext, "dronmxE"), clean),
+                    new File("/sdcard/Download/" + clean),
+                    new File("/sdcard/Download/dronmxE/" + clean),
+                    new File("/sdcard/helpers/" + clean),
+                    new File("/sdcard/DJI/" + clean),
+                    new File("/sdcard/dronmxE/" + clean)
+            };
+            for (File c : candidates) {
+                if (c.exists() && c.isFile()) return c;
+            }
+            return null;
+        }
+
         @JavascriptInterface
         public boolean overwriteSlotFromLocal(String slotGuid, String localFileName) {
-            File targetFile = null;
-            if (localFileName != null && !localFileName.trim().isEmpty()) {
-                File direct = new File(localFileName.trim());
-                if (direct.exists() && direct.isFile()) {
-                    targetFile = direct;
-                }
-            }
+            new Thread(() -> {
+                File targetFile = null;
+                File tempDownloaded = null;
 
-            if (targetFile == null) {
-                synchronized (availableKmzFiles) {
-                    for (File f : availableKmzFiles) {
-                        if (f.getAbsolutePath().equalsIgnoreCase(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
-                            targetFile = f; break;
+                try {
+                    if (localFileName != null && localFileName.startsWith("mtp://")) {
+                        onLog("[MTP] Descargando misión remota desde RC 2: " + localFileName);
+                        String remoteName = localFileName.replace("mtp://rc2/Download/", "").trim();
+                        List<MtpHelper.RemoteKmzFile> remoteList = mtpHelper.scanDownloadKmzFiles();
+                        int remoteHandle = -1;
+                        long remoteSize = 0;
+                        for (MtpHelper.RemoteKmzFile rk : remoteList) {
+                            if (rk.name.equalsIgnoreCase(remoteName)) {
+                                remoteHandle = rk.handle;
+                                remoteSize = rk.size;
+                                break;
+                            }
+                        }
+                        if (remoteHandle > 0 && remoteSize > 0) {
+                            byte[] data = mtpHelper.readRemoteBytes(remoteHandle, (int) remoteSize);
+                            if (data != null && data.length > 0) {
+                                String cleanFileName = remoteName.endsWith(".kmz") ? remoteName : (remoteName + ".kmz");
+                                tempDownloaded = new File(getCacheDir(), cleanFileName);
+                                try (FileOutputStream fos = new FileOutputStream(tempDownloaded)) {
+                                    fos.write(data);
+                                }
+                                targetFile = tempDownloaded;
+                                onLog("[OK] Misión remota " + remoteName + " descargada temporalmente (" + data.length + " bytes)");
+                            }
                         }
                     }
-                }
-            }
 
-            if (targetFile == null || !targetFile.exists()) {
-                File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                File candidate = new File(downloads, localFileName);
-                if (candidate.exists()) targetFile = candidate;
-                else {
-                    File dronmxeDir = new File(downloads, "dronmxE");
-                    File candidate2 = new File(dronmxeDir, localFileName);
-                    if (candidate2.exists()) targetFile = candidate2;
-                }
-            }
-
-            if (targetFile == null || !targetFile.exists()) {
-                showToast("Archivo no encontrado: " + localFileName);
-                return false;
-            }
-
-            final File fileToInject = targetFile;
-            new Thread(() -> {
-                boolean ok = mtpHelper.overwriteMissionKmz(slotGuid, fileToInject);
-                runOnUiThread(() -> {
-                    if (ok) {
-                        triggerHaptic();
-                        showToast("🎉 ¡Misión inyectada con éxito en RC 2!");
-                        notifyJs("refreshDeviceSlots();");
-                    } else {
-                        showToast("Error en la transferencia MTP. Revisa el log.");
+                    if (targetFile == null) {
+                        targetFile = resolveTargetKmzFile(localFileName);
                     }
-                });
+
+                    if (targetFile == null || !targetFile.exists()) {
+                        runOnUiThread(() -> showToast("Archivo no encontrado: " + localFileName));
+                        onLog("[ERR] Archivo no encontrado para sobreescribir: " + localFileName);
+                        return;
+                    }
+
+                    onLog("[MTP] Iniciando inyección de " + targetFile.getName() + " hacia ranura " + slotGuid);
+                    boolean ok = mtpHelper.overwriteMissionKmz(slotGuid, targetFile);
+                    runOnUiThread(() -> {
+                        if (ok) {
+                            triggerHaptic();
+                            showToast("🎉 ¡Misión inyectada con éxito en RC 2!");
+                            notifyJs("refreshDeviceSlots();");
+                        } else {
+                            showToast("Error en la transferencia MTP. Revisa el log.");
+                        }
+                    });
+                } catch (Exception e) {
+                    onLog("[ERR] Excepción sobreescribiendo ranura: " + e.getMessage());
+                } finally {
+                    if (tempDownloaded != null && tempDownloaded.exists()) {
+                        try { tempDownloaded.delete(); } catch (Exception ignored) {}
+                    }
+                }
+            }).start();
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean createNewSlotFromLocal(String localFileName) {
+            new Thread(() -> {
+                File targetFile = null;
+                File tempDownloaded = null;
+
+                try {
+                    if (localFileName != null && localFileName.startsWith("mtp://")) {
+                        onLog("[MTP] Descargando misión remota desde RC 2: " + localFileName);
+                        String remoteName = localFileName.replace("mtp://rc2/Download/", "").trim();
+                        List<MtpHelper.RemoteKmzFile> remoteList = mtpHelper.scanDownloadKmzFiles();
+                        int remoteHandle = -1;
+                        long remoteSize = 0;
+                        for (MtpHelper.RemoteKmzFile rk : remoteList) {
+                            if (rk.name.equalsIgnoreCase(remoteName)) {
+                                remoteHandle = rk.handle;
+                                remoteSize = rk.size;
+                                break;
+                            }
+                        }
+                        if (remoteHandle > 0 && remoteSize > 0) {
+                            byte[] data = mtpHelper.readRemoteBytes(remoteHandle, (int) remoteSize);
+                            if (data != null && data.length > 0) {
+                                String cleanFileName = remoteName.endsWith(".kmz") ? remoteName : (remoteName + ".kmz");
+                                tempDownloaded = new File(getCacheDir(), cleanFileName);
+                                try (FileOutputStream fos = new FileOutputStream(tempDownloaded)) {
+                                    fos.write(data);
+                                }
+                                targetFile = tempDownloaded;
+                            }
+                        }
+                    }
+
+                    if (targetFile == null) {
+                        targetFile = resolveTargetKmzFile(localFileName);
+                    }
+
+                    if (targetFile == null || !targetFile.exists()) {
+                        runOnUiThread(() -> showToast("Archivo no encontrado: " + localFileName));
+                        onLog("[ERR] Archivo no encontrado para crear nueva ranura: " + localFileName);
+                        return;
+                    }
+
+                    onLog("[MTP] Creando nueva ranura en RC 2 desde: " + targetFile.getName());
+                    boolean ok = mtpHelper.createNewMissionSlot(targetFile);
+                    runOnUiThread(() -> {
+                        if (ok) {
+                            triggerHaptic();
+                            showToast("🎉 ¡Nueva misión creada en RC 2!");
+                            notifyJs("refreshDeviceSlots();");
+                        } else {
+                            showToast("Error al crear la misión en RC 2. Revisa el log.");
+                        }
+                    });
+                } catch (Exception e) {
+                    onLog("[ERR] Excepción creando ranura: " + e.getMessage());
+                } finally {
+                    if (tempDownloaded != null && tempDownloaded.exists()) {
+                        try { tempDownloaded.delete(); } catch (Exception ignored) {}
+                    }
+                }
             }).start();
             return true;
         }
@@ -671,57 +836,6 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             filePickerLauncher.launch(intent);
         }
 
-        @JavascriptInterface
-        public boolean createNewSlotFromLocal(String localFileName) {
-            File targetFile = null;
-            if (localFileName != null && !localFileName.trim().isEmpty()) {
-                File direct = new File(localFileName.trim());
-                if (direct.exists() && direct.isFile()) {
-                    targetFile = direct;
-                }
-            }
-
-            if (targetFile == null) {
-                synchronized (availableKmzFiles) {
-                    for (File f : availableKmzFiles) {
-                        if (f.getAbsolutePath().equalsIgnoreCase(localFileName) || f.getName().equalsIgnoreCase(localFileName)) {
-                            targetFile = f; break;
-                        }
-                    }
-                }
-            }
-
-            if (targetFile == null || !targetFile.exists()) {
-                File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                File candidate = new File(downloads, localFileName);
-                if (candidate.exists()) targetFile = candidate;
-                else {
-                    File dronmxeDir = new File(downloads, "dronmxE");
-                    File candidate2 = new File(dronmxeDir, localFileName);
-                    if (candidate2.exists()) targetFile = candidate2;
-                }
-            }
-
-            if (targetFile == null || !targetFile.exists()) {
-                showToast("Archivo no encontrado: " + localFileName);
-                return false;
-            }
-
-            final File fileToInject = targetFile;
-            new Thread(() -> {
-                boolean ok = mtpHelper.createNewMissionSlot(fileToInject);
-                runOnUiThread(() -> {
-                    if (ok) {
-                        triggerHaptic();
-                        showToast("🎉 ¡Nueva misión creada con éxito en RC 2!");
-                        notifyJs("refreshDeviceSlots();");
-                    } else {
-                        showToast("Error creando nueva misión MTP.");
-                    }
-                });
-            }).start();
-            return true;
-        }
 
         @JavascriptInterface
         public boolean deleteLocalMission(String localFileName) {
