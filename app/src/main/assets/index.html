@@ -1534,26 +1534,24 @@ function directSyncLocalMission(mName, e) {
 #app-view-mtp .lbox.open {
   display:block
 }
-@media(max-width:660px)and(orientation:portrait) {
-  .tbar{display:flex
+@media (max-width: 660px) and (orientation: portrait) {
+  .tbar { display: flex; }
+  #app-view-mtp .panel { display: none !important; }
+  #app-view-mtp .panel.vis { display: flex !important; }
 }
-#app-view-mtp .panel {
-  display:none!important
+
+@media (min-width: 661px), (orientation: landscape) {
+  .tbar { display: none !important; }
+  #app-view-mtp .panel { display: flex !important; }
 }
-#app-view-mtp .panel.vis {
-  display:flex!important
-}
-@media(min-width:661px),(orientation:landscape) {
-  .tbar{display:none!important
-}
-#app-view-mtp .panel {
-  display:flex!important
-}
+
 @keyframes spin {
-  to{transform:rotate(360deg)
+  to { transform: rotate(360deg); }
 }
+
 #app-view-mtp .spin {
-  display:inline-block;animation:spin 1s linear infinite
+  display: inline-block;
+  animation: spin 1s linear infinite;
 }
 #app-view-mtp /* MODAL CAMBIAR RUTA */
     .modal-overlay {
@@ -1627,6 +1625,214 @@ function directSyncLocalMission(mName, e) {
   display: flex !important;
 }
 
+
+    /* Mission Status Floating Card (Top Left of Map) */
+    .mission-status-card {
+      background: rgba(18, 20, 26, 0.94);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 290px;
+      max-width: 380px;
+    }
+    .msc-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .msc-btn-new {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 5px 9px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .msc-btn-new:active {
+      transform: scale(0.95);
+    }
+    .msc-mission-title {
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.3px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .msc-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .msc-action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: #252932;
+      border: 1px solid #383c4a;
+      color: #fff;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .msc-action-btn:active {
+      transform: scale(0.92);
+    }
+    .msc-action-btn.btn-trash {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+    .msc-action-btn.btn-trash:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+    .msc-action-btn.btn-params {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+    }
+    .msc-action-btn.btn-params:hover {
+      background: rgba(56, 189, 248, 0.4);
+    }
+    .msc-bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Modal Cards for Flight Type Selection */
+    .flight-type-modal-card {
+      width: 440px !important;
+      max-width: 92vw !important;
+      background: #141722 !important;
+      border: 1px solid #283042 !important;
+      border-radius: 14px !important;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7) !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      color: #fff !important;
+    }
+    .ftm-hdr {
+      background: #1c2230;
+      border-bottom: 1px solid #283042;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ftm-title {
+      color: #38bdf8;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+    .ftm-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .ftm-close:hover {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .ftm-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .flight-type-card {
+      background: #1c2230 !important;
+      border: 1px solid #2b3548 !important;
+      border-radius: 10px !important;
+      padding: 14px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 14px !important;
+      cursor: pointer !important;
+      transition: all .2s ease !important;
+    }
+    .flight-type-card:hover, .flight-type-card:active {
+      background: #232c3d !important;
+      border-color: #38bdf8 !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15) !important;
+    }
+    .ftc-icon {
+      font-size: 26px !important;
+      width: 44px !important;
+      height: 44px !important;
+      background: rgba(56, 189, 248, 0.15) !important;
+      border-radius: 10px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+    }
+    .ftc-info {
+      flex: 1 !important;
+    }
+    .ftc-title {
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 14px !important;
+      margin-bottom: 3px !important;
+    }
+    .ftc-desc {
+      color: #cbd5e1 !important;
+      font-size: 11.5px !important;
+      line-height: 1.35 !important;
+    }
+    .ftc-arrow {
+      color: #38bdf8 !important;
+      font-weight: 900 !important;
+      font-size: 16px !important;
+    }
+
+    /* Button for New Mission in Sidebar */
+    .btn-new-mission-sidebar {
+      width: 100%;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #000;
+      border: none;
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 3px 10px rgba(56,189,248,0.25);
+    }
+    .btn-new-mission-sidebar:active {
+      transform: scale(0.98);
+    }
+
 </style>
 </head>
 <body>
@@ -1660,10 +1866,17 @@ function directSyncLocalMission(mName, e) {
         </div>
       </div>
 
-      <!-- Mode Selector: Area, Corridor, 3D -->
+      <!-- New Mission Action Button -->
+      <div style="padding: 0 16px; margin-top: 8px;">
+        <button class="btn-new-mission-sidebar" onclick="startNewMissionFlow()">
+          <span>➕</span> Nueva Misión de Vuelo
+        </button>
+      </div>
+
+      <!-- Mode Selector: Area, Lineal, 3D -->
       <div class="mode-tab-bar">
         <div class="mode-tab active" onclick="setMissionMode('Area')">Área</div>
-        <div class="mode-tab" onclick="setMissionMode('Corridor')">Corredor</div>
+        <div class="mode-tab" onclick="setMissionMode('Lineal')">Lineal</div>
         <div class="mode-tab" onclick="setMissionMode('3D')">Vuelo 3D</div>
       </div>
 
@@ -1848,13 +2061,28 @@ function directSyncLocalMission(mName, e) {
   <div id="map-wrapper">
     <div id="map"></div>
 
-    <!-- Floating Top-Left Controls: Save, Reset, Points badge -->
+    <!-- Floating Top-Left Controls: Status Card with Title, Candado, Basurita, Parámetros -->
     <div class="map-top-left-controls">
-      <div class="map-btn-row">
-        <button class="map-action-square-btn" title="Guardar Misión" onclick="openSaveMissionModal()">💾</button>
-        <button class="map-reset-btn" onclick="resetCurrentBoundary()">Reset</button>
+      <div class="mission-status-card" id="mission-status-card">
+        <div class="msc-top-row">
+          <button class="msc-btn-new" title="Crear nueva misión" onclick="startNewMissionFlow()">
+            <span>➕</span> Nuevo
+          </button>
+          <span class="msc-mission-title" id="msc-mission-title">Misión 1</span>
+          <div class="msc-actions">
+            <!-- 1. Candado -->
+            <button class="msc-action-btn" id="msc-btn-lock" title="Bloquear / Desbloquear geometría" onclick="toggleCurrentMissionLock()">🔒</button>
+            <!-- 2. Basurita -->
+            <button class="msc-action-btn btn-trash" id="msc-btn-delete" title="Eliminar misión actual" onclick="deleteCurrentMission()">🗑️</button>
+            <!-- 3. Editar Parámetros -->
+            <button class="msc-action-btn btn-params" id="msc-btn-params" title="Editar parámetros fotogramétricos" onclick="switchToView('config')">⚙️</button>
+          </div>
+        </div>
+        <div class="msc-bottom-row">
+          <div class="map-points-badge" id="map-points-badge">0 puntos — esperando</div>
+          <button class="map-reset-btn" style="padding: 2px 8px; font-size: 10px;" onclick="resetCurrentBoundary()">Limpiar</button>
+        </div>
       </div>
-      <div class="map-points-badge" id="map-points-badge">0 puntos — esperando</div>
     </div>
 
     <!-- Floating Bottom-Left Controls: Undo -->
@@ -1902,6 +2130,45 @@ function directSyncLocalMission(mName, e) {
      MODAL 2: GUARDAR Y EXPORTAR MISIÓN
 
        ========================================================= -->
+  
+  <!-- MODAL: ELEGIR TIPO DE VUELO (NUEVA MISIÓN) -->
+  <div id="modal-choose-flight-type" class="modal-overlay">
+    <div class="flight-type-modal-card">
+      <div class="ftm-hdr">
+        <div class="ftm-title">➕ Selecciona el Tipo de Vuelo</div>
+        <button class="ftm-close" onclick="closeModal('modal-choose-flight-type')">✕</button>
+      </div>
+      <div class="ftm-body">
+        <div class="flight-type-card" onclick="selectFlightTypeAndCreate('Area')">
+          <div class="ftc-icon">🗺️</div>
+          <div class="ftc-info">
+            <div class="ftc-title">Área</div>
+            <div class="ftc-desc">Polígono para mapeo fotogramétrico de superficies y ortomosaicos.</div>
+          </div>
+          <div class="ftc-arrow">➔</div>
+        </div>
+
+        <div class="flight-type-card" onclick="selectFlightTypeAndCreate('Lineal')">
+          <div class="ftc-icon">🛣️</div>
+          <div class="ftc-info">
+            <div class="ftc-title">Lineal</div>
+            <div class="ftc-desc">Trayectoria continua para caminos, ríos, canales y líneas de tendido.</div>
+          </div>
+          <div class="ftc-arrow">➔</div>
+        </div>
+
+        <div class="flight-type-card" onclick="selectFlightTypeAndCreate('3D')">
+          <div class="ftc-icon">🏗️</div>
+          <div class="ftc-info">
+            <div class="ftc-title">Vuelo 3D</div>
+            <div class="ftc-desc">Doble cuadrícula cruzada con gimbal a -60° para modelos 3D y fachadas.</div>
+          </div>
+          <div class="ftc-arrow">➔</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-save-mission" class="modal-overlay">
     <div class="modal-card">
       <h3 class="modal-title">💾 Guardar y Exportar Misión</h3>
@@ -2164,11 +2431,146 @@ function directSyncLocalMission(mName, e) {
       recalculateMission();
     }
 
+    
+    // =========================================================================
+    // NEW MISSION FLOW & CONSECUTIVE NAMING LOGIC
+    // =========================================================================
+
+    function startNewMissionFlow() {
+      openModal('modal-choose-flight-type');
+    }
+
+    function generateConsecutiveMissionName(type) {
+      let prefix = 'Area_';
+      if (type === 'Lineal' || type === 'Corridor') prefix = 'Lineal_';
+      else if (type === '3D') prefix = 'Vuelo3D_';
+
+      const missions = AppState.savedMissions || [];
+      let maxNum = 0;
+      missions.forEach(m => {
+        if (m && m.name && m.name.startsWith(prefix)) {
+          const suffix = m.name.substring(prefix.length);
+          const num = parseInt(suffix, 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      });
+      const nextNum = maxNum + 1;
+      const numStr = nextNum < 10 ? ('0' + nextNum) : ('' + nextNum);
+      return prefix + numStr;
+    }
+
+    async function selectFlightTypeAndCreate(type) {
+      const normType = (type === 'Corridor') ? 'Lineal' : type;
+      const newName = generateConsecutiveMissionName(normType);
+      AppState.mode = normType;
+      AppState.points = [];
+      AppState.waylines = [];
+      AppState.altitude = 80.0;
+      AppState.speed = 8.0;
+      AppState.camera = 'DJI_AIR_3S';
+      AppState.gridAngle = 0;
+      if (normType === '3D') {
+        AppState.gimbalPitch = -60.0;
+      } else {
+        AppState.gimbalPitch = -90.0;
+      }
+
+      const newMission = {
+        name: newName,
+        date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        points: [],
+        altitude: AppState.altitude,
+        speed: AppState.speed,
+        camera: AppState.camera,
+        gridAngle: 0,
+        mode: normType,
+        locked: false // Desbloqueado para dibujar en el mapa
+      };
+
+      AppState.savedMissions.unshift(newMission);
+      AppState.currentMissionIdx = 0;
+      AppState.currentMissionName = newName;
+      localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+
+      renderBoundary();
+      recalculateMission();
+      renderMissionsList();
+      closeModal('modal-choose-flight-type');
+      switchToView('map');
+      updateMissionHeaderBar();
+
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast("✓ Misión '" + newName + "' lista. Dibuja los puntos en el mapa.");
+      }
+    }
+
+    function updateMissionHeaderBar() {
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      const titleElem = document.getElementById('msc-mission-title');
+      const lockBtn = document.getElementById('msc-btn-lock');
+      if (cur) {
+        if (titleElem) titleElem.textContent = cur.name || 'Misión';
+        if (lockBtn) {
+          const isLocked = cur.locked !== false;
+          lockBtn.textContent = isLocked ? '🔒' : '🔓';
+          lockBtn.title = isLocked ? 'Misión bloqueada (toca para permitir modificar)' : 'Misión desbloqueada para modificación';
+          lockBtn.style.borderColor = isLocked ? '#f59e0b' : '#22c55e';
+        }
+      } else {
+        if (titleElem) titleElem.textContent = AppState.currentMissionName || 'Sin Misión';
+        if (lockBtn) lockBtn.textContent = '🔓';
+      }
+      updatePointBadge();
+      updateLockStatusBadge();
+    }
+
+    function toggleCurrentMissionLock() {
+      const curIdx = AppState.currentMissionIdx;
+      if (curIdx !== null && curIdx !== undefined && AppState.savedMissions[curIdx]) {
+        toggleMissionLock(curIdx);
+        updateMissionHeaderBar();
+      }
+    }
+
+    function deleteCurrentMission() {
+      const curIdx = AppState.currentMissionIdx;
+      if (curIdx !== null && curIdx !== undefined && AppState.savedMissions[curIdx]) {
+        deleteMission(curIdx);
+        if (AppState.savedMissions.length > 0) {
+          loadMission(0);
+        } else {
+          AppState.currentMissionIdx = null;
+          AppState.points = [];
+          renderBoundary();
+          recalculateMission();
+          updateMissionHeaderBar();
+        }
+      }
+    }
+
+    async function autoExportCurrentMissionKmz() {
+      try {
+        const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+        const name = cur ? cur.name : (AppState.currentMissionName || 'Mision_1');
+        if (typeof buildDjiKmzBlob === 'function' && AppState.points.length >= 2) {
+          const base64Data = await buildDjiKmzBlob(name);
+          if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
+            window.AndroidBridge.saveKmzMission(base64Data, name, "NEW");
+          }
+        }
+      } catch (e) {
+        console.error("Auto export KMZ error:", e);
+      }
+    }
+
     function setMissionMode(mode) {
       AppState.mode = mode;
       document.querySelectorAll('.mode-tab').forEach(tab => {
         const text = tab.textContent.trim();
         tab.classList.toggle('active', (mode === 'Area' && text === 'Área') ||
+                                       ((mode === 'Lineal' || mode === 'Corridor') && (text === 'Lineal' || text === 'Corredor')) ||
                                        (mode === 'Corridor' && text === 'Corredor') ||
                                        (mode === '3D' && text === 'Vuelo 3D'));
       });
@@ -2216,15 +2618,38 @@ function directSyncLocalMission(mName, e) {
       const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
       if (cur && cur.locked !== false) {
         if (window.AndroidBridge && window.AndroidBridge.showToast) {
-          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Desbloquéala en la lista para modificar.');
+          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Toca el candado [🔒] para modificar.');
         } else {
-          alert('🔒 Misión protegida con candado. Desbloquéala en la lista para modificar.');
+          alert('🔒 Misión protegida con candado. Toca el candado [🔒] para modificar.');
         }
         return;
       }
       AppState.points.push(latlng);
       renderBoundary();
       recalculateMission();
+
+      // Auto-guardado en tiempo real en la misión activa
+      if (cur) {
+        cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+        cur.altitude = AppState.altitude;
+        cur.speed = AppState.speed;
+        cur.camera = AppState.camera;
+        cur.gridAngle = AppState.gridAngle || 0;
+        cur.mode = AppState.mode || 'Area';
+
+        const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
+        if (AppState.points.length >= minPts && !cur.autoLockedOnce) {
+          cur.locked = true;
+          cur.autoLockedOnce = true;
+          autoExportCurrentMissionKmz();
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast("🔒 Misión '" + cur.name + "' guardada y lista para RC 2");
+          }
+        }
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+        renderMissionsList();
+        updateMissionHeaderBar();
+      }
     }
 
     function undoLastPoint() {
@@ -2270,7 +2695,7 @@ function directSyncLocalMission(mName, e) {
 
       if (pts.length < 2) return;
 
-      if (AppState.mode === 'Corridor') {
+      if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
         L.polyline(pts, {
           color: '#1e88e5',
           weight: 4,
@@ -2314,7 +2739,7 @@ function directSyncLocalMission(mName, e) {
         }
       });
 
-      if (pts.length >= 3 && AppState.mode !== 'Corridor' && !isLocked) {
+      if (pts.length >= 3 && AppState.mode !== 'Lineal' && AppState.mode !== 'Corridor' && !isLocked) {
         for (let i = 0; i < pts.length; i++) {
           const nextIdx = (i + 1) % pts.length;
           const midLat = (pts[i].lat + pts[nextIdx].lat) / 2;
@@ -2350,10 +2775,12 @@ function directSyncLocalMission(mName, e) {
     function updatePointBadge() {
       const count = AppState.points.length;
       const badge = document.getElementById('map-points-badge');
+      if (!badge) return;
+      const minPts = (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') ? 2 : 3;
       if (count === 0) {
-        badge.textContent = '0 puntos — esperando';
-      } else if (count < 3) {
-        badge.textContent = `${count} puntos — agrega ${3 - count} más`;
+        badge.textContent = '0 puntos — toca el mapa';
+      } else if (count < minPts) {
+        badge.textContent = `${count} punto — agrega ${minPts - count} más`;
       } else {
         badge.textContent = `${count} puntos — listo`;
       }
@@ -2417,7 +2844,7 @@ function directSyncLocalMission(mName, e) {
         `(Foto cada ${photoInterval} s para ${AppState.frontOverlap}% solape frontal)`;
 
       let gridWaypoints = [];
-      if (AppState.mode === 'Corridor') {
+      if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
         gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
       } else if (AppState.mode === '3D') {
         // Modo 3D: Doble pasada ortogonal cruzada (Cross-Hatch)
@@ -2429,6 +2856,20 @@ function directSyncLocalMission(mName, e) {
         gridWaypoints = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
       }
       AppState.waylines = gridWaypoints;
+
+      // Auto-sincronización de parámetros en la misión activa
+      if (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined && AppState.savedMissions && AppState.savedMissions[AppState.currentMissionIdx]) {
+        const cur = AppState.savedMissions[AppState.currentMissionIdx];
+        cur.altitude = AppState.altitude;
+        cur.speed = AppState.speed;
+        cur.camera = AppState.camera;
+        cur.gridAngle = AppState.gridAngle || 0;
+        cur.frontOverlap = AppState.frontOverlap;
+        cur.sideOverlap = AppState.sideOverlap;
+        cur.gimbalPitch = AppState.gimbalPitch;
+        cur.mode = AppState.mode || 'Area';
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      }
 
       // Altimetry and Ground mode rendering
       const isGroundMode = (AppState.altitudeMode === 'ground');
@@ -2469,9 +2910,8 @@ function directSyncLocalMission(mName, e) {
               fillOpacity: 1
             }).addTo(flightLinesLayer);
 
-            if (idx % 6 === 0 || idx === 0 || idx === gridWaypoints.length - 1) {
-              marker.bindTooltip(`${altSim}m AGL`, { permanent: true, direction: 'top', className: 'alt-label-tooltip' });
-            }
+// AGL text tooltips removed for clean satellite view
+
           });
         } else {
           // Modo Takeoff estándar: oro de aviación limpio y nítido
@@ -2692,31 +3132,37 @@ function directSyncLocalMission(mName, e) {
     }
 
     function switchToView(viewName) {
+      const viewMap = document.getElementById('drawer-view-map');
+      const viewCfg = document.getElementById('drawer-view-config');
+      const expScreen = document.getElementById('export-screen');
+      const nextContainer = document.getElementById('map-next-container');
+
       if (viewName === 'map') {
-        document.getElementById('drawer-view-map').classList.add('active');
-        document.getElementById('drawer-view-config').classList.remove('active');
-        document.getElementById('export-screen').classList.remove('active');
-        document.getElementById('map-next-container').style.display = 'block';
+        if (viewMap) viewMap.classList.add('active');
+        if (viewCfg) viewCfg.classList.remove('active');
+        if (expScreen) expScreen.classList.remove('active');
+        if (nextContainer) nextContainer.style.display = 'block';
       } else if (viewName === 'config') {
-        document.getElementById('drawer-view-map').classList.remove('active');
-        document.getElementById('drawer-view-config').classList.add('active');
-        document.getElementById('export-screen').classList.remove('active');
-        document.getElementById('map-next-container').style.display = 'none';
+        if (viewMap) viewMap.classList.remove('active');
+        if (viewCfg) viewCfg.classList.add('active');
+        if (expScreen) expScreen.classList.remove('active');
+        if (nextContainer) nextContainer.style.display = 'none';
         recalculateMission();
       } else if (viewName === 'export') {
-        document.getElementById('export-screen').classList.add('active');
-        refreshExportMissionsList();
-        refreshDjiSlots();
+        if (expScreen) expScreen.classList.add('active');
+        if (typeof refreshExportMissionsList === 'function') refreshExportMissionsList();
+        if (typeof refreshDjiSlots === 'function') refreshDjiSlots();
       }
     }
 
     function closeExportScreen() {
-      document.getElementById('export-screen').classList.remove('active');
+      const expScreen = document.getElementById('export-screen');
+      if (expScreen) expScreen.classList.remove('active');
     }
 
     // Modal Helpers
-    function openModal(id) { document.getElementById(id).classList.add('active'); }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('active'); }
+    function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('active'); }
 
     function openSendToDjiFlyModal() {
       openModal('modal-send-dji');
@@ -3039,6 +3485,7 @@ function directSyncLocalMission(mName, e) {
       switchToView('map');
       renderMissionsList();
       updateLockStatusBadge();
+      if(typeof updateMissionHeaderBar === 'function') updateMissionHeaderBar();
 
       // Direct camera fly to mission bounds
       const leafletInstance = window.leafletMap || (typeof map !== 'undefined' ? map : null);
@@ -3358,6 +3805,7 @@ function directSyncLocalMission(mName, e) {
       m.locked = !m.locked;
       localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
       renderMissionsList();
+      renderBoundary();
       updateLockStatusBadge();
       const statusText = m.locked ? '🔒 Misión bloqueada (Protegida contra cambios)' : '🔓 Misión desbloqueada (Ahora puedes modificarla)';
       if (window.AndroidBridge && window.AndroidBridge.showToast) {

@@ -1027,6 +1027,29 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     fos.write(decodedBytes);
                 }
 
+                // Guardar también directamente en las carpetas de DJI Fly si la app corre dentro del Control RC 2
+                String[] directDjiDirs = new String[]{
+                    "/sdcard/Android/data/dji.go.v5/files/waypoint",
+                    "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint",
+                    "/sdcard/.dji.go.v5/waypoint",
+                    "/storage/emulated/0/.dji.go.v5/waypoint",
+                    "/sdcard/.waypoint",
+                    "/storage/emulated/0/.waypoint"
+                };
+                for (String djiRootPath : directDjiDirs) {
+                    try {
+                        File djiRoot = new File(djiRootPath);
+                        if (djiRoot.exists() && djiRoot.isDirectory()) {
+                            File missionFolder = new File(djiRoot, missionName);
+                            if (!missionFolder.exists()) missionFolder.mkdirs();
+                            File directKmz = new File(missionFolder, missionName + ".kmz");
+                            try (FileOutputStream fos = new FileOutputStream(directKmz)) {
+                                fos.write(decodedBytes);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+
                 synchronized (availableKmzFiles) {
                     if (!availableKmzFiles.contains(kmzDronmxe)) {
                         availableKmzFiles.add(0, kmzDronmxe);
