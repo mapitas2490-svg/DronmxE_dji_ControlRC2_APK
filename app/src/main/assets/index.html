@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>LiteFlight - DJI Waypoint Mission Planner</title>
+  <title>dronmxE - DJI Waypoint Mission Planner</title>
   <link rel="stylesheet" href="leaflet.css" />
   <script src="leaflet.js"></script>
   <script src="jszip.min.js"></script>
@@ -1066,20 +1066,34 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
   
-/* ==================== UNIFIED TOP NAV SWITCHER ==================== */
+/* ==================== 1/3 SCREEN SIDEBAR DRAWER ==================== */
+#sidebar {
+  width: 33.33vw !important;
+  min-width: 320px !important;
+  max-width: 33.33vw !important;
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  z-index: 1000;
+  box-shadow: 2px 0 16px rgba(0,0,0,0.15);
+  position: relative;
+  transition: transform 0.25s ease;
+}
+
+/* ==================== TOP-RIGHT NAV SWITCHER ==================== */
 .app-top-nav-switcher {
   position: absolute;
   top: 10px;
-  left: 62%;
-  transform: translateX(-50%);
+  right: 18px;
   z-index: 1500;
   display: flex;
-  background: rgba(18, 20, 26, 0.90);
-  backdrop-filter: blur(10px);
+  background: rgba(18, 20, 26, 0.94);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 20px;
   padding: 4px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.55);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.6);
 }
 .nav-tab-btn {
   background: transparent;
@@ -1103,6 +1117,89 @@
 .nav-tab-btn.active.mtp-tab {
   background: linear-gradient(135deg, #059669, #10b981);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.45);
+}
+
+/* ==================== MISSION CARD & LOCK STYLES ==================== */
+.mission-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.mission-card:hover {
+  background: #f8fafc;
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.mission-card.selected {
+  border-color: var(--primary);
+  background: #f0f7ff;
+}
+.mission-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.mission-card-info h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mission-card-info p {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.mission-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-mission-lock {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+.btn-mission-lock.unlocked {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+.btn-mission-lock:hover {
+  transform: scale(1.08);
+}
+.map-lock-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  margin-left: 6px;
+}
+.map-lock-status-badge.locked {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.map-lock-status-badge.unlocked {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
 }
 
 /* ==================== VIEW CONTAINERS ==================== */
@@ -1458,7 +1555,7 @@
 </style>
 </head>
 <body>
-<!-- UNIFIED TOP APP SWITCHER -->
+<!-- UNIFIED TOP APP SWITCHER (Top Right) -->
 <div class="app-top-nav-switcher">
   <button id="nav-btn-planner" class="nav-tab-btn active" onclick="switchAppSection('planner')">
     <span>🗺️</span> Planificador
@@ -1468,7 +1565,7 @@
   </button>
 </div>
 
-<!-- SECTION 1: FLIGHT PLANNER -->
+<!-- SECTION 1: FLIGHT PLANNER (dronmxE) -->
 <div id="app-view-planner">
 
 
@@ -1481,8 +1578,8 @@
     <div id="drawer-view-map" class="drawer-view active">
       <div class="app-header">
         <div class="app-title-row">
-          <span class="app-title">LiteFlight</span>
-          <a href="mailto:jhonson2490@gmail.com?subject=LiteFlight%20Misiones" class="app-author-link" title="Contactar a Edgar" onclick="if(window.AndroidBridge && window.AndroidBridge.openEmail){ window.AndroidBridge.openEmail('jhonson2490@gmail.com'); return false; }">
+          <span class="app-title">dronmxE</span>
+          <a href="mailto:jhonson2490@gmail.com?subject=dronmxE%20Misiones" class="app-author-link" title="Contactar a Edgar" onclick="if(window.AndroidBridge && window.AndroidBridge.openEmail){ window.AndroidBridge.openEmail('jhonson2490@gmail.com'); return false; }">
             Edgar 🇲🇽
           </a>
         </div>
@@ -1865,7 +1962,7 @@
     <div class="modal-card">
       <h3 class="modal-title">Mapas Offline MBTiles</h3>
       <div class="modal-subtext-blue">
-        Puedes colocar tus archivos raster <strong>.mbtiles</strong> en la carpeta <code>/sdcard/LiteFlight/tiles/</code> del control para visualizarlos automáticamente.
+        Puedes colocar tus archivos raster <strong>.mbtiles</strong> en la carpeta <code>/sdcard/dronmxE/tiles/</code> del control para visualizarlos automáticamente.
       </div>
       <div style="font-size: 0.85rem; color: #334155;">
         <p>Capas detectadas:</p>
@@ -2028,6 +2125,7 @@
         zoomControl: false,
         attributionControl: false
       }).setView(defaultCenter, 17);
+      window.leafletMap = map;
 
       L.tileLayer('https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
         maxZoom: 20
@@ -2047,6 +2145,7 @@
 
       loadSavedMissionsFromStorage();
     ensureInitialMissions();
+    if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
       seedInitialPolygon(defaultCenter);
     }
 
@@ -2080,6 +2179,15 @@
     }
 
     function addBoundaryPoint(latlng) {
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      if (cur && cur.locked !== false) {
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast('🔒 Misión protegida con candado. Desbloquéala en la lista para modificar.');
+        } else {
+          alert('🔒 Misión protegida con candado. Desbloquéala en la lista para modificar.');
+        }
+        return;
+      }
       AppState.points.push(latlng);
       renderBoundary();
       recalculateMission();
@@ -2094,6 +2202,13 @@
     }
 
     function resetCurrentBoundary() {
+      const curIdx = AppState.currentMissionIdx;
+      if (curIdx !== undefined && curIdx !== null && AppState.savedMissions[curIdx]) {
+        if (AppState.savedMissions[curIdx].locked !== false) {
+          alert('⚠️ La misión actual está bloqueada con candado [🔒]. Desbloquéala en la lista de misiones para permitir limpiarla o modificarla.');
+          return;
+        }
+      }
       AppState.points = [];
       AppState.waylines = [];
       polygonLayer.clearLayers();
@@ -2454,6 +2569,7 @@
       localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
       loadSavedMissionsFromStorage();
     ensureInitialMissions();
+    if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
       closeModal('modal-save-mission');
       if (window.AndroidBridge && window.AndroidBridge.showToast) {
         window.AndroidBridge.showToast("Misión '" + name + "' guardada con éxito");
@@ -2554,26 +2670,34 @@
       const container = document.getElementById('missions-container');
       const hint = document.getElementById('empty-missions-hint');
       const countBadge = document.getElementById('saved-count-badge');
+      if (!container) return;
       container.innerHTML = '';
 
-      if (AppState.savedMissions.length === 0) {
-        hint.style.display = 'block';
-        countBadge.textContent = '0 guardadas';
+      if (!AppState.savedMissions || AppState.savedMissions.length === 0) {
+        if (hint) hint.style.display = 'block';
+        if (countBadge) countBadge.textContent = '0 guardadas';
         return;
       }
 
-      hint.style.display = 'none';
-      countBadge.textContent = `${AppState.savedMissions.length} guardadas`;
+      if (hint) hint.style.display = 'none';
+      if (countBadge) countBadge.textContent = `${AppState.savedMissions.length} guardadas`;
 
       AppState.savedMissions.forEach((m, idx) => {
+        if (typeof m.locked === 'undefined') m.locked = true;
+        const isSelected = (AppState.currentMissionIdx === idx);
         const card = document.createElement('div');
-        card.className = 'mission-card';
+        card.className = 'mission-card' + (isSelected ? ' selected' : '');
         card.innerHTML = `
           <div class="mission-card-info" onclick="loadMission(${idx})">
             <h4>${m.name}</h4>
             <p>${m.points.length} puntos · ${m.date}</p>
           </div>
-          <button class="mission-card-delete" onclick="deleteMission(${idx})">🗑️</button>
+          <div class="mission-card-actions">
+            <button class="btn-mission-lock ${m.locked ? 'locked' : 'unlocked'}" onclick="event.stopPropagation(); toggleMissionLock(${idx})" title="${m.locked ? 'Misión bloqueada con candado (Toca para desbloquear y permitir modificar)' : 'Misión desbloqueada (Toca para bloquear)'}">
+              ${m.locked ? '🔒' : '🔓'}
+            </button>
+            <button class="mission-card-delete" onclick="event.stopPropagation(); deleteMission(${idx})" title="Eliminar misión">🗑️</button>
+          </div>
         `;
         container.appendChild(card);
       });
@@ -2582,6 +2706,7 @@
     function loadMission(idx) {
       const m = AppState.savedMissions[idx];
       if (!m) return;
+      AppState.currentMissionIdx = idx;
       AppState.currentMissionName = m.name || ('Mision ' + (idx + 1));
       AppState.points = m.points.map(p => L.latLng(p.lat, p.lng));
       AppState.altitude = m.altitude || 80;
@@ -2590,27 +2715,39 @@
       renderBoundary();
       recalculateMission();
       switchToView('map');
+      renderMissionsList();
+      updateLockStatusBadge();
 
-      // Auto-Fly camera and fit bounds centered on mission
-      if (AppState.points && AppState.points.length > 0 && window.map) {
-        let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-        AppState.points.forEach(p => {
-          if (p.lat < minLat) minLat = p.lat;
-          if (p.lat > maxLat) maxLat = p.lat;
-          if (p.lng < minLng) minLng = p.lng;
-          if (p.lng > maxLng) maxLng = p.lng;
-        });
-        window.map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [80, 80], maxZoom: 18, animate: true });
-        setTimeout(function() {
-          if (window.map) window.map.invalidateSize();
-        }, 200);
+      // Direct camera fly to mission bounds
+      const leafletInstance = window.leafletMap || (typeof map !== 'undefined' ? map : null);
+      if (leafletInstance && AppState.points && AppState.points.length > 0) {
+        try {
+          const bounds = L.latLngBounds(AppState.points);
+          leafletInstance.fitBounds(bounds, { padding: [60, 60], maxZoom: 18, animate: true });
+          setTimeout(function() {
+            leafletInstance.invalidateSize();
+          }, 250);
+        } catch (err) {
+          console.error("Error flying to bounds:", err);
+        }
       }
     }
 
     function deleteMission(idx) {
-      AppState.savedMissions.splice(idx, 1);
-      localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
-      renderMissionsList();
+      const m = AppState.savedMissions[idx];
+      if (m && m.locked !== false) {
+        alert('⚠️ Esta misión está protegida con candado. Toca el candado [🔒] primero para desbloquearla antes de eliminar.');
+        return;
+      }
+      if (confirm('¿Eliminar la misión "' + (m ? m.name : '') + '"?')) {
+        AppState.savedMissions.splice(idx, 1);
+        if (AppState.currentMissionIdx === idx) {
+          AppState.currentMissionIdx = null;
+        }
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+        renderMissionsList();
+        updateLockStatusBadge();
+      }
     }
 
     function refreshDjiSlots() {
@@ -2833,7 +2970,7 @@
     });
   
     // =========================================================================
-    // UNIFIED CONTROLLER: NAVIGATION & MISSIONS INITIALIZER
+    // UNIFIED NAVIGATION CONTROLLER (dronmxE)
     // =========================================================================
     function switchAppSection(section) {
       const viewPlanner = document.getElementById('app-view-planner');
@@ -2854,18 +2991,18 @@
         viewPlanner.style.display = 'flex';
         btnMtp.classList.remove('active');
         btnPlanner.classList.add('active');
-        if (window.map) {
+        const leafletInstance = window.leafletMap || (typeof map !== 'undefined' ? map : null);
+        if (leafletInstance) {
           setTimeout(function() {
-            window.map.invalidateSize();
+            leafletInstance.invalidateSize();
           }, 200);
         }
       }
     }
 
-    // Default Preloaded Missions (20 Real-World Diverse Flights)
-    const DEFAULT_PRELOADED_MISSIONS = [{"name": "Mision 01 - Zocalo CDMX", "date": "02/10/2026 08:40", "points": [{"lat": 19.43413, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1310097}, {"lat": 19.431208, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1342923}], "altitude": 60, "speed": 6.0, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 02 - Bosque Chapultepec Castillo", "date": "02/10/2026 08:41", "points": [{"lat": 19.422525, "lng": -99.1819}, {"lat": 19.4212865, "lng": -99.1790071}, {"lat": 19.4188359, "lng": -99.1806951}, {"lat": 19.4192426, "lng": -99.1827916}, {"lat": 19.4211712, "lng": -99.1844166}], "altitude": 80, "speed": 8.0, "camera": "DJI_AIR_3S"}, {"name": "Mision 03 - Canales Xochimilco Cuemanco", "date": "02/10/2026 08:42", "points": [{"lat": 19.281475, "lng": -99.0987}, {"lat": 19.2805081, "lng": -99.0950152}, {"lat": 19.2771467, "lng": -99.0962167}, {"lat": 19.2764971, "lng": -99.0987}, {"lat": 19.2767531, "lng": -99.1019055}, {"lat": 19.2804067, "lng": -99.1021987}], "altitude": 90, "speed": 9.5, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 04 - Piramides Teotihuacan Sol", "date": "02/10/2026 08:43", "points": [{"lat": 19.6959, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8388249}, {"lat": 19.6894066, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8461312}], "altitude": 120, "speed": 11.0, "camera": "DJI_MAVIC_3_ENTERPRISE"}, {"name": "Mision 05 - Ciudad Universitaria Estadio", "date": "02/10/2026 08:44", "points": [{"lat": 19.33535, "lng": -99.1923}, {"lat": 19.3352342, "lng": -99.1897203}, {"lat": 19.3328, "lng": -99.1898413}, {"lat": 19.3315861, "lng": -99.1910135}, {"lat": 19.3298053, "lng": -99.1923}, {"lat": 19.3304887, "lng": -99.1947494}, {"lat": 19.3328, "lng": -99.1943349}, {"lat": 19.3342097, "lng": -99.193794}], "altitude": 75, "speed": 7.0, "camera": "DJI_MINI_4_PRO"}, {"name": "Mision 06 - Centro Coyoacan Jardin Hidalgo", "date": "02/10/2026 08:45", "points": [{"lat": 19.350975, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1605757}, {"lat": 19.34854, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1633098}], "altitude": 50, "speed": 5.0, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 07 - Santa Fe Centro Financiero", "date": "02/10/2026 08:46", "points": [{"lat": 19.36528, "lng": -99.2618}, {"lat": 19.3638929, "lng": -99.2585611}, {"lat": 19.3611482, "lng": -99.2604509}, {"lat": 19.3616037, "lng": -99.2627983}, {"lat": 19.3637637, "lng": -99.2646176}], "altitude": 100, "speed": 10.0, "camera": "DJI_AIR_3S"}, {"name": "Mision 08 - Polanco Paseo de la Reforma", "date": "02/10/2026 08:47", "points": [{"lat": 19.43027, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.1974231}, {"lat": 19.4266987, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.201435}], "altitude": 70, "speed": 7.5, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 09 - Tlatelolco Tres Culturas", "date": "02/10/2026 08:48", "points": [{"lat": 19.4534, "lng": -99.1374}, {"lat": 19.4528475, "lng": -99.1352922}, {"lat": 19.4509267, "lng": -99.1359795}, {"lat": 19.4505555, "lng": -99.1374}, {"lat": 19.4507018, "lng": -99.1392337}, {"lat": 19.4527895, "lng": -99.1394014}], "altitude": 65, "speed": 6.5, "camera": "DJI_MINI_4_PRO"}, {"name": "Mision 10 - Basilica Guadalupe Atrio", "date": "02/10/2026 08:49", "points": [{"lat": 19.48664, "lng": -99.1176}, {"lat": 19.485451, "lng": -99.1148217}, {"lat": 19.4830985, "lng": -99.1164428}, {"lat": 19.4834889, "lng": -99.1184563}, {"lat": 19.4853403, "lng": -99.1200169}], "altitude": 85, "speed": 8.0, "camera": "DJI_AIR_3S"}, {"name": "Mision 11 - Cuautitlan Izcalli Lago Pajaros", "date": "02/10/2026 08:50", "points": [{"lat": 19.66143, "lng": -99.2154}, {"lat": 19.6595475, "lng": -99.2109963}, {"lat": 19.6558226, "lng": -99.2135658}, {"lat": 19.6564407, "lng": -99.2167573}, {"lat": 19.6593722, "lng": -99.2192309}], "altitude": 110, "speed": 12.0, "camera": "DJI_MAVIC_3_ENTERPRISE"}, {"name": "Mision 12 - Naucalpan Parque Naucalli", "date": "02/10/2026 08:51", "points": [{"lat": 19.50022, "lng": -99.2392}, {"lat": 19.4997895, "lng": -99.2361545}, {"lat": 19.4969493, "lng": -99.2366406}, {"lat": 19.4958501, "lng": -99.2383571}, {"lat": 19.494622, "lng": -99.2406703}, {"lat": 19.4967242, "lng": -99.2428059}, {"lat": 19.498777, "lng": -99.2408987}], "altitude": 80, "speed": 8.5, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 13 - Ecatepec Parque Ecologico", "date": "02/10/2026 08:52", "points": [{"lat": 19.59267, "lng": -99.0432}, {"lat": 19.5915097, "lng": -99.0387698}, {"lat": 19.587476, "lng": -99.0402143}, {"lat": 19.5866965, "lng": -99.0432}, {"lat": 19.5870037, "lng": -99.0470539}, {"lat": 19.591388, "lng": -99.0474065}], "altitude": 130, "speed": 13.0, "camera": "DJI_AIR_3S"}, {"name": "Mision 14 - Ciudad Neza Estadio Metropolitano", "date": "02/10/2026 08:53", "points": [{"lat": 19.40241, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0113369}, {"lat": 19.3981893, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0160774}], "altitude": 55, "speed": 6.0, "camera": "DJI_MINI_4_PRO"}, {"name": "Mision 15 - Desierto de los Leones Monasterio", "date": "02/10/2026 08:54", "points": [{"lat": 19.316775, "lng": -99.3082}, {"lat": 19.3150411, "lng": -99.3041525}, {"lat": 19.3116102, "lng": -99.3065142}, {"lat": 19.3121796, "lng": -99.3094475}, {"lat": 19.3148796, "lng": -99.311721}], "altitude": 95, "speed": 9.0, "camera": "DJI_MAVIC_3_ENTERPRISE"}, {"name": "Mision 16 - Ajusco Volcan San Miguel", "date": "02/10/2026 08:55", "points": [{"lat": 19.21235, "lng": -99.2562}, {"lat": 19.2109687, "lng": -99.2509383}, {"lat": 19.2061667, "lng": -99.2526539}, {"lat": 19.2052387, "lng": -99.2562}, {"lat": 19.2056044, "lng": -99.2607773}, {"lat": 19.2108239, "lng": -99.261196}], "altitude": 150, "speed": 14.0, "camera": "DJI_MAVIC_3_ENTERPRISE"}, {"name": "Mision 17 - La Marquesa Valles", "date": "02/10/2026 08:56", "points": [{"lat": 19.310325, "lng": -99.3621}, {"lat": 19.3080957, "lng": -99.3568963}, {"lat": 19.3036846, "lng": -99.3599326}, {"lat": 19.3044167, "lng": -99.3637038}, {"lat": 19.3078881, "lng": -99.3666268}], "altitude": 125, "speed": 12.0, "camera": "DJI_AIR_3S"}, {"name": "Mision 18 - Iztapalapa Cerro de la Estrella", "date": "02/10/2026 08:57", "points": [{"lat": 19.346005, "lng": -99.0912}, {"lat": 19.345561, "lng": -99.0880623}, {"lat": 19.3426321, "lng": -99.0885631}, {"lat": 19.3414986, "lng": -99.0903316}, {"lat": 19.3402321, "lng": -99.0927148}, {"lat": 19.3423999, "lng": -99.0949151}, {"lat": 19.3445169, "lng": -99.0929501}], "altitude": 75, "speed": 7.5, "camera": "DJI_MINI_5_PRO"}, {"name": "Mision 19 - Valle de Bravo Lago Marina", "date": "02/10/2026 08:58", "points": [{"lat": 19.19828, "lng": -100.1345}, {"lat": 19.196954, "lng": -100.1294492}, {"lat": 19.192344, "lng": -100.1310961}, {"lat": 19.1914532, "lng": -100.1345}, {"lat": 19.1918042, "lng": -100.1388938}, {"lat": 19.1968149, "lng": -100.1392958}], "altitude": 140, "speed": 15.0, "camera": "DJI_MAVIC_3_ENTERPRISE"}, {"name": "Mision 20 - Tepotzotlan Arcos del Sitio", "date": "02/10/2026 08:59", "points": [{"lat": 19.7516, "lng": -99.3921}, {"lat": 19.7514456, "lng": -99.3886516}, {"lat": 19.7482, "lng": -99.3888134}, {"lat": 19.7465814, "lng": -99.3903803}, {"lat": 19.7442071, "lng": -99.3921}, {"lat": 19.7451183, "lng": -99.3953743}, {"lat": 19.7482, "lng": -99.3948201}, {"lat": 19.7500797, "lng": -99.3940971}], "altitude": 105, "speed": 10.5, "camera": "DJI_AIR_3S"}];
+    // Default 20 Preloaded Missions
+    const DEFAULT_PRELOADED_MISSIONS = [{"name": "Mision 01 - Zocalo CDMX", "date": "02/10/2026 08:40", "points": [{"lat": 19.43413, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1310097}, {"lat": 19.431208, "lng": -99.1332}, {"lat": 19.4326, "lng": -99.1342923}], "altitude": 60, "speed": 6.0, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 02 - Bosque Chapultepec Castillo", "date": "02/10/2026 08:41", "points": [{"lat": 19.422525, "lng": -99.1819}, {"lat": 19.4212865, "lng": -99.1790071}, {"lat": 19.4188359, "lng": -99.1806951}, {"lat": 19.4192426, "lng": -99.1827916}, {"lat": 19.4211712, "lng": -99.1844166}], "altitude": 80, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 03 - Canales Xochimilco Cuemanco", "date": "02/10/2026 08:42", "points": [{"lat": 19.281475, "lng": -99.0987}, {"lat": 19.2805081, "lng": -99.0950152}, {"lat": 19.2771467, "lng": -99.0962167}, {"lat": 19.2764971, "lng": -99.0987}, {"lat": 19.2767531, "lng": -99.1019055}, {"lat": 19.2804067, "lng": -99.1021987}], "altitude": 90, "speed": 9.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 04 - Piramides Teotihuacan Sol", "date": "02/10/2026 08:43", "points": [{"lat": 19.6959, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8388249}, {"lat": 19.6894066, "lng": -98.8437}, {"lat": 19.6925, "lng": -98.8461312}], "altitude": 120, "speed": 11.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 05 - Ciudad Universitaria Estadio", "date": "02/10/2026 08:44", "points": [{"lat": 19.33535, "lng": -99.1923}, {"lat": 19.3352342, "lng": -99.1897203}, {"lat": 19.3328, "lng": -99.1898413}, {"lat": 19.3315861, "lng": -99.1910135}, {"lat": 19.3298053, "lng": -99.1923}, {"lat": 19.3304887, "lng": -99.1947494}, {"lat": 19.3328, "lng": -99.1943349}, {"lat": 19.3342097, "lng": -99.193794}], "altitude": 75, "speed": 7.0, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 06 - Centro Coyoacan Jardin Hidalgo", "date": "02/10/2026 08:45", "points": [{"lat": 19.350975, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1605757}, {"lat": 19.34854, "lng": -99.1624}, {"lat": 19.3497, "lng": -99.1633098}], "altitude": 50, "speed": 5.0, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 07 - Santa Fe Centro Financiero", "date": "02/10/2026 08:46", "points": [{"lat": 19.36528, "lng": -99.2618}, {"lat": 19.3638929, "lng": -99.2585611}, {"lat": 19.3611482, "lng": -99.2604509}, {"lat": 19.3616037, "lng": -99.2627983}, {"lat": 19.3637637, "lng": -99.2646176}], "altitude": 100, "speed": 10.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 08 - Polanco Paseo de la Reforma", "date": "02/10/2026 08:47", "points": [{"lat": 19.43027, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.1974231}, {"lat": 19.4266987, "lng": -99.2001}, {"lat": 19.4284, "lng": -99.201435}], "altitude": 70, "speed": 7.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 09 - Tlatelolco Tres Culturas", "date": "02/10/2026 08:48", "points": [{"lat": 19.4534, "lng": -99.1374}, {"lat": 19.4528475, "lng": -99.1352922}, {"lat": 19.4509267, "lng": -99.1359795}, {"lat": 19.4505555, "lng": -99.1374}, {"lat": 19.4507018, "lng": -99.1392337}, {"lat": 19.4527895, "lng": -99.1394014}], "altitude": 65, "speed": 6.5, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 10 - Basilica Guadalupe Atrio", "date": "02/10/2026 08:49", "points": [{"lat": 19.48664, "lng": -99.1176}, {"lat": 19.485451, "lng": -99.1148217}, {"lat": 19.4830985, "lng": -99.1164428}, {"lat": 19.4834889, "lng": -99.1184563}, {"lat": 19.4853403, "lng": -99.1200169}], "altitude": 85, "speed": 8.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 11 - Cuautitlan Izcalli Lago Pajaros", "date": "02/10/2026 08:50", "points": [{"lat": 19.66143, "lng": -99.2154}, {"lat": 19.6595475, "lng": -99.2109963}, {"lat": 19.6558226, "lng": -99.2135658}, {"lat": 19.6564407, "lng": -99.2167573}, {"lat": 19.6593722, "lng": -99.2192309}], "altitude": 110, "speed": 12.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 12 - Naucalpan Parque Naucalli", "date": "02/10/2026 08:51", "points": [{"lat": 19.50022, "lng": -99.2392}, {"lat": 19.4997895, "lng": -99.2361545}, {"lat": 19.4969493, "lng": -99.2366406}, {"lat": 19.4958501, "lng": -99.2383571}, {"lat": 19.494622, "lng": -99.2406703}, {"lat": 19.4967242, "lng": -99.2428059}, {"lat": 19.498777, "lng": -99.2408987}], "altitude": 80, "speed": 8.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 13 - Ecatepec Parque Ecologico", "date": "02/10/2026 08:52", "points": [{"lat": 19.59267, "lng": -99.0432}, {"lat": 19.5915097, "lng": -99.0387698}, {"lat": 19.587476, "lng": -99.0402143}, {"lat": 19.5866965, "lng": -99.0432}, {"lat": 19.5870037, "lng": -99.0470539}, {"lat": 19.591388, "lng": -99.0474065}], "altitude": 130, "speed": 13.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 14 - Ciudad Neza Estadio Metropolitano", "date": "02/10/2026 08:53", "points": [{"lat": 19.40241, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0113369}, {"lat": 19.3981893, "lng": -99.0145}, {"lat": 19.4002, "lng": -99.0160774}], "altitude": 55, "speed": 6.0, "camera": "DJI_MINI_4_PRO", "locked": true}, {"name": "Mision 15 - Desierto de los Leones Monasterio", "date": "02/10/2026 08:54", "points": [{"lat": 19.316775, "lng": -99.3082}, {"lat": 19.3150411, "lng": -99.3041525}, {"lat": 19.3116102, "lng": -99.3065142}, {"lat": 19.3121796, "lng": -99.3094475}, {"lat": 19.3148796, "lng": -99.311721}], "altitude": 95, "speed": 9.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 16 - Ajusco Volcan San Miguel", "date": "02/10/2026 08:55", "points": [{"lat": 19.21235, "lng": -99.2562}, {"lat": 19.2109687, "lng": -99.2509383}, {"lat": 19.2061667, "lng": -99.2526539}, {"lat": 19.2052387, "lng": -99.2562}, {"lat": 19.2056044, "lng": -99.2607773}, {"lat": 19.2108239, "lng": -99.261196}], "altitude": 150, "speed": 14.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 17 - La Marquesa Valles", "date": "02/10/2026 08:56", "points": [{"lat": 19.310325, "lng": -99.3621}, {"lat": 19.3080957, "lng": -99.3568963}, {"lat": 19.3036846, "lng": -99.3599326}, {"lat": 19.3044167, "lng": -99.3637038}, {"lat": 19.3078881, "lng": -99.3666268}], "altitude": 125, "speed": 12.0, "camera": "DJI_AIR_3S", "locked": true}, {"name": "Mision 18 - Iztapalapa Cerro de la Estrella", "date": "02/10/2026 08:57", "points": [{"lat": 19.346005, "lng": -99.0912}, {"lat": 19.345561, "lng": -99.0880623}, {"lat": 19.3426321, "lng": -99.0885631}, {"lat": 19.3414986, "lng": -99.0903316}, {"lat": 19.3402321, "lng": -99.0927148}, {"lat": 19.3423999, "lng": -99.0949151}, {"lat": 19.3445169, "lng": -99.0929501}], "altitude": 75, "speed": 7.5, "camera": "DJI_MINI_5_PRO", "locked": true}, {"name": "Mision 19 - Valle de Bravo Lago Marina", "date": "02/10/2026 08:58", "points": [{"lat": 19.19828, "lng": -100.1345}, {"lat": 19.196954, "lng": -100.1294492}, {"lat": 19.192344, "lng": -100.1310961}, {"lat": 19.1914532, "lng": -100.1345}, {"lat": 19.1918042, "lng": -100.1388938}, {"lat": 19.1968149, "lng": -100.1392958}], "altitude": 140, "speed": 15.0, "camera": "DJI_MAVIC_3_ENTERPRISE", "locked": true}, {"name": "Mision 20 - Tepotzotlan Arcos del Sitio", "date": "02/10/2026 08:59", "points": [{"lat": 19.7516, "lng": -99.3921}, {"lat": 19.7514456, "lng": -99.3886516}, {"lat": 19.7482, "lng": -99.3888134}, {"lat": 19.7465814, "lng": -99.3903803}, {"lat": 19.7442071, "lng": -99.3921}, {"lat": 19.7451183, "lng": -99.3953743}, {"lat": 19.7482, "lng": -99.3948201}, {"lat": 19.7500797, "lng": -99.3940971}], "altitude": 105, "speed": 10.5, "camera": "DJI_AIR_3S", "locked": true}];
 
-    // Ensure missions exist on init
     function ensureInitialMissions() {
       try {
         let existing = [];
@@ -2877,6 +3014,10 @@
           existing = DEFAULT_PRELOADED_MISSIONS;
           localStorage.setItem('saved_missions', JSON.stringify(existing));
         }
+        // Ensure all have locked property
+        existing.forEach(m => {
+          if (typeof m.locked === 'undefined') m.locked = true;
+        });
         AppState.savedMissions = existing;
         if (typeof renderMissionsList === 'function') {
           renderMissionsList();
@@ -2886,10 +3027,661 @@
       }
     }
 
+    // Lock / Unlock Toggle for Saved Missions
+    function toggleMissionLock(idx) {
+      const m = AppState.savedMissions[idx];
+      if (!m) return;
+      m.locked = !m.locked;
+      localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      renderMissionsList();
+      updateLockStatusBadge();
+      const statusText = m.locked ? '🔒 Misión bloqueada (Protegida contra cambios)' : '🔓 Misión desbloqueada (Ahora puedes modificarla)';
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast(statusText);
+      } else {
+        console.log(statusText);
+      }
+    }
+
+    function updateLockStatusBadge() {
+      const badge = document.getElementById('map-points-badge');
+      if (!badge) return;
+      let existingLock = badge.querySelector('.map-lock-status-badge');
+      if (existingLock) existingLock.remove();
+
+      const curIdx = AppState.currentMissionIdx;
+      if (curIdx !== undefined && curIdx !== null && AppState.savedMissions[curIdx]) {
+        const isLocked = AppState.savedMissions[curIdx].locked !== false;
+        const lockSpan = document.createElement('span');
+        lockSpan.className = 'map-lock-status-badge ' + (isLocked ? 'locked' : 'unlocked');
+        lockSpan.textContent = isLocked ? '🔒 Bloqueada' : '🔓 Editable';
+        lockSpan.title = isLocked ? 'Toca el candado en la lista para permitir modificar' : 'Misión desbloqueada para modificación';
+        badge.appendChild(lockSpan);
+      }
+    }
+
     // =========================================================================
-    // MTP RC 2 BRIDGE SCRIPT LOGIC
+    // MTP RC 2 BRIDGE LOGIC
     // =========================================================================
     
+let S = {
+  deviceSlots: [],
+  localMissions: [],
+  selDeviceGuid: null,
+  selLocalMission: null,
+  connected: false
+};
+
+function esc(t){ return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function relTime(ts){
+  if(!ts) return '--';
+  const d = Math.round((Date.now()-ts)/1000);
+  if(d < 60) return 'hace un momento';
+  const m = Math.round(d/60);
+  if(m < 60) return 'hace '+m+' min';
+  const h = Math.round(m/60);
+  if(h < 24) return 'hace '+h+' hr';
+  const days = Math.round(h/24);
+  return 'hace '+days+' días';
+}
+function shortGuid(g){ if(!g) return '--'; return g.length<=16 ? g : g.substring(0,16)+'...'; }
+
+function appendLog(msg){
+  const box = document.getElementById('log-box');
+  const t = new Date().toTimeString().split(' ')[0];
+  const div = document.createElement('div');
+  div.textContent = '['+t+'] '+msg;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function forceReconnectUsb(){
+  appendLog('[USB] Reconectando sesión con DJI RC 2...');
+  var txt = document.getElementById('stxt');
+  if(txt) txt.textContent = 'Reconectando con DJI RC 2...';
+  var listDev = document.getElementById('list-dev');
+  if(listDev) listDev.innerHTML = '<div class="empty"><span class="spin">⏳</span> Reconectando y escaneando RC 2...</div>';
+  if(window.AndroidBridge && window.AndroidBridge.refreshUsb){
+    window.AndroidBridge.refreshUsb();
+  }
+}
+
+function toggleLog(){ document.getElementById('log-box').classList.toggle('open'); }
+
+function onDeviceStatusChanged(connected, description){
+  S.connected = connected;
+  const dot = document.getElementById('sdot'), txt = document.getElementById('stxt');
+  const isBlocked = description && description.toLowerCase().indexOf('bloqueado') !== -1;
+  if(isBlocked) {
+    dot.className = 'sdot warn';
+  } else {
+    dot.className = 'sdot ' + (connected ? 'ok' : 'err');
+  }
+  txt.textContent = description || (connected ? 'DJI RC 2 Conectado y Listo' : 'Sin cable OTG conectado');
+  updateSyncBtn();
+  if(connected && !isBlocked) {
+    refreshDeviceSlots();
+  } else {
+    renderDeviceSlots();
+  }
+}
+function onLogMessage(msg){ appendLog(msg); }
+
+function updateSyncBtn(){
+  const hasLocal = !!S.selLocalMission;
+  const hasDevice = !!S.selDeviceGuid;
+  const isConnected = !!S.connected;
+  document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice && isConnected);
+  document.getElementById('btn-new').disabled = !(hasLocal && isConnected);
+}
+
+function switchTab(tab){
+  ['dev','local'].forEach(function(id){
+    document.getElementById('tab-'+id).classList.toggle('active', id===tab);
+    document.getElementById('panel-'+id).classList.toggle('vis', id===tab);
+  });
+}
+
+function renderDeviceSlots(){
+  const c = document.getElementById('list-dev'), slots = S.deviceSlots;
+  const td = document.getElementById('tab-dev');
+  if(td) td.textContent = '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
+
+  if(!slots || slots.length === 0){
+    const desc = document.getElementById('stxt') ? document.getElementById('stxt').textContent : '';
+    if(desc.toLowerCase().indexOf('bloqueado') !== -1) {
+      c.innerHTML = '<div class="empty" style="border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); padding:10px 14px; border-radius:10px; text-align:center;">'
+        + '<div style="font-size:14px; margin-bottom:4px; color:#f59e0b; font-weight:800;">⚠️ Control RC 2 Bloqueado</div>'
+        + '<div style="color:var(--txt); font-size:11px; margin-bottom:6px;">Pantalla del RC 2 bloqueada o en modo "Solo Carga".</div>'
+        + '<div style="color:var(--muted); font-size:10px; line-height:1.4; text-align:left; background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; margin-bottom:8px;">'
+        + '1. Desbloquea la pantalla del RC 2.<br>'
+        + '2. Desliza la barra superior y pulsa <b>"Carga USB"</b>.<br>'
+        + '3. Elige <b>"Transferencia de archivos"</b> (MTP).<br>'
+        + '4. Pulsa abajo para escanear de nuevo.'
+        + '</div>'
+        + '<button onclick="forceReconnectUsb()" style="background:linear-gradient(135deg,#f59e0b,#d97706); color:#000; font-weight:800; border:none; padding:7px 16px; border-radius:6px; cursor:pointer; font-size:11px;">🔄 Reconectar y Escanear RC 2</button>'
+        + '</div>';
+    } else if(!S.connected) {
+      c.innerHTML = '<div class="empty">🔌 Sin conexión USB-OTG.<br><small style="color:var(--muted)">Conecta el cable USB OTG al teléfono y desbloquea la pantalla del RC 2.</small></div>';
+    } else {
+      c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Presiona el botón "➕ CREAR NUEVA MISIÓN EN RC 2" para transferir una.</small></div>';
+    }
+    S.selDeviceGuid = null;
+    document.getElementById('dst-slot').textContent = 'Sin ranura seleccionada';
+    updateSyncBtn();
+    return;
+  }
+
+  if(!S.selDeviceGuid || !slots.some(s => s.guid === S.selDeviceGuid)){
+    S.selDeviceGuid = slots[0].guid;
+  }
+
+  c.innerHTML = '';
+  slots.forEach(function(slot, i){
+    const isAct = slot.guid === S.selDeviceGuid;
+    const isGuid = (!slot.displayName || slot.displayName === slot.guid);
+    const nameStr = isGuid ? ('Misión RC 2 (#' + shortGuid(slot.guid) + ')') : slot.displayName;
+    
+    if (isAct) {
+      document.getElementById('dst-slot').textContent = nameStr;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'mrow' + (isAct ? ' sel' : '');
+    row.onclick = function(){ selectDeviceSlot(slot.guid); };
+
+    const cid = 'cv-d-' + i;
+    const wp = slot.wpCount ? (slot.wpCount + ' WP') : '-- WP';
+
+    row.innerHTML = 
+      '<div class="mrow-top">'
+        +'<div class="twrap"><canvas id="'+cid+'" class="tcanv"></canvas><span class="tbadge">'+wp+'</span></div>'
+        +'<div class="mmeta">'
+          +'<div class="mpills"><span class="pill pp">DJI Fly RC 2</span></div>'
+          +'<div class="msub">'+relTime(slot.dateModified)+' · '+wp+'</div>'
+          +'<div class="msub guid-txt">GUID: '+esc(shortGuid(slot.guid))+'</div>'
+        +'</div>'
+        +'<div class="mact">'
+          +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openDeviceSlotInGoogleEarth(\''+esc(slot.guid)+'\', event)">🌍</button>'
+          +'<button class="btn-del" title="Eliminar del RC 2" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="mrow-name" title="'+esc(nameStr)+'">'+esc(nameStr)+'</div>';
+
+    c.appendChild(row);
+    drawThumb(cid, slot.coords || null, false);
+  });
+
+  updateSyncBtn();
+}
+
+function selectDeviceSlot(guid){
+  S.selDeviceGuid = guid;
+  const slot = S.deviceSlots.find(s => s.guid === guid);
+  const isGuid = (!slot || !slot.displayName || slot.displayName === guid);
+  const nameStr = slot ? (isGuid ? ('Misión RC 2 (#' + shortGuid(guid) + ')') : slot.displayName) : '--';
+  document.getElementById('dst-slot').textContent = nameStr;
+  
+  var rows = document.querySelectorAll('#list-dev .mrow');
+  rows.forEach(function(r, idx){
+    var si = S.deviceSlots[idx];
+    if(si && si.guid === guid){
+      r.classList.add('sel');
+    } else {
+      r.classList.remove('sel');
+    }
+  });
+  updateSyncBtn();
+}
+
+function renderLocalMissions(){
+  const c = document.getElementById('list-local'), missions = S.localMissions;
+  const tl = document.getElementById('tab-local');
+  if(tl) tl.textContent = '📱 Misiones Locales (' + (missions ? missions.length : 0) + ')';
+
+  if(!missions || missions.length === 0){
+    c.innerHTML = '<div class="empty">📂 No se encontraron archivos .kmz<br><small style="color:var(--muted)">Guarda archivos .kmz en /sdcard/Download o usa "📂 Abrir".</small></div>';
+    S.selLocalMission = null;
+    document.getElementById('src-name').textContent = 'Ninguna';
+    updateSyncBtn();
+    return;
+  }
+
+  // Mantener la misión actualmente seleccionada
+  if(S.selLocalMission){
+    var found = missions.find(m => (m.path && S.selLocalMission.path && m.path === S.selLocalMission.path) || (m.name && S.selLocalMission.name && m.name === S.selLocalMission.name));
+    if(found) S.selLocalMission = found;
+  } else {
+    S.selLocalMission = missions[0];
+  }
+  var selWp = (S.selLocalMission && S.selLocalMission.wpCount) ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
+  document.getElementById('src-name').textContent = S.selLocalMission ? (S.selLocalMission.name + selWp) : 'Ninguna';
+
+  var prevScroll = c.scrollTop;
+  c.innerHTML = '';
+  missions.forEach(function(m, idx){
+    const isSel = S.selLocalMission && ((S.selLocalMission.path && m.path && S.selLocalMission.path === m.path) || S.selLocalMission.name === m.name);
+    const row = document.createElement('div');
+    row.className = 'mrow' + (isSel ? ' sel' : '');
+    row.onclick = function(){ selectLocalMission(m); };
+
+    const cid = 'cv-l-' + idx;
+    const wp = m.wpCount ? (m.wpCount + ' WP') : '-- WP';
+    const tag = m.tag || 'Descargas';
+
+    row.innerHTML = 
+      '<div class="mrow-top">'
+        +'<div class="twrap"><canvas id="'+cid+'" class="tcanv"></canvas><span class="tbadge">'+wp+'</span></div>'
+        +'<div class="mmeta">'
+          +'<div class="mpills"><span class="pill tp">'+esc(tag)+'</span></div>'
+          +'<div class="msub">'+esc(tag)+' · '+relTime(m.dateModified)+' · '+wp+'</div>'
+        +'</div>'
+        +'<div class="mact">'
+          +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openMissionInGoogleEarth(\''+esc(m.name)+'\', event)">🌍</button>'
+          +'<button class="btn-del" title="Eliminar del celular" onclick="deleteLocalMissionItem(\''+esc(m.name)+'\', event)">🗑️</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="mrow-name" title="'+esc(m.name)+'">'+esc(m.name)+'</div>';
+
+    c.appendChild(row);
+    drawThumb(cid, m.coords || null, true);
+  });
+  c.scrollTop = prevScroll;
+
+  updateSyncBtn();
+}
+
+function selectLocalMission(m){
+  S.selLocalMission = m;
+  var selWp = m.wpCount ? (' (' + m.wpCount + ' WP)') : '';
+  document.getElementById('src-name').textContent = m.name + selWp;
+  appendLog('[APP] Misión origen seleccionada: ' + m.name + selWp);
+  
+  var rows = document.querySelectorAll('#list-local .mrow');
+  rows.forEach(function(r, idx){
+    var item = S.localMissions[idx];
+    if(item && ((item.path && m.path && item.path === m.path) || item.name === m.name)){
+      r.classList.add('sel');
+    } else {
+      r.classList.remove('sel');
+    }
+  });
+  updateSyncBtn();
+}
+
+function drawThumb(id, coords, isLocal){
+  var canvas = document.getElementById(id);
+  if(!canvas) return;
+  var ctx = canvas.getContext('2d'), W = canvas.width = 160, H = canvas.height = 108;
+
+  // Background fallback
+  if(isLocal){
+    var g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#381010');
+    g.addColorStop(1, '#1a0606');
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = '#0f1520';
+  }
+  ctx.fillRect(0, 0, W, H);
+
+  if(!coords || coords.length === 0){
+    ctx.strokeStyle = isLocal ? 'rgba(120,30,30,0.4)' : 'rgba(30,60,100,0.3)';
+    ctx.lineWidth = 0.5;
+    for(var x=0; x<=W; x+=18){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for(var y=0; y<=H; y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    var lc = isLocal ? '#22c55e' : '#38bdf8';
+    ctx.strokeStyle = lc; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.beginPath();
+    var cols = 5, rows = 4;
+    var xs = [], ys = [];
+    for(var i=0; i<cols; i++) xs.push(18 + i*((W-36)/(cols-1)));
+    for(var i=0; i<rows; i++) ys.push(16 + i*((H-32)/(rows-1)));
+    var fp = true;
+    for(var r=0; r<rows; r++){
+      var rXs = (r%2 === 0) ? xs.slice().reverse() : xs;
+      rXs.forEach(function(xv){ if(fp){ ctx.moveTo(xv, ys[r]); fp = false; } else ctx.lineTo(xv, ys[r]); });
+      if(r < rows-1) ctx.lineTo((r%2 === 0) ? xs[0] : xs[xs.length-1], ys[r+1]);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for(var r=0; r<rows; r++){
+      var rXs = (r%2 === 0) ? xs.slice().reverse() : xs;
+      rXs.forEach(function(xv){ ctx.beginPath(); ctx.arc(xv, ys[r], 2.5, 0, Math.PI*2); ctx.fill(); });
+    }
+    return;
+  }
+
+  var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  coords.forEach(function(pt){
+    if(pt[0]<minX) minX=pt[0]; if(pt[0]>maxX) maxX=pt[0];
+    if(pt[1]<minY) minY=pt[1]; if(pt[1]>maxY) maxY=pt[1];
+  });
+  var pad = 10, sx = (maxX-minX)||0.0001, sy = (maxY-minY)||0.0001;
+  function toXY(pt){ return [pad+((pt[0]-minX)/sx)*(W-pad*2), H-(pad+((pt[1]-minY)/sy)*(H-pad*2))]; }
+
+  function drawWaypointsOverlay() {
+    ctx.shadowColor = isLocal ? 'rgba(34, 197, 94, 0.9)' : 'rgba(56, 189, 248, 0.9)';
+    ctx.shadowBlur = 4;
+    ctx.strokeStyle = isLocal ? '#22c55e' : '#38bdf8';
+    ctx.lineWidth = 2.0; ctx.lineJoin = 'round'; ctx.beginPath();
+    coords.forEach(function(pt, i){ var p = toXY(pt); if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0],p[1]); });
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    var rad = coords.length > 50 ? 1.2 : (coords.length > 20 ? 1.8 : 3.0);
+    ctx.fillStyle = '#ffffff';
+    coords.forEach(function(pt){ var p = toXY(pt); ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, Math.PI*2); ctx.fill(); });
+  }
+
+  // ESRI ArcGIS Satellite World Imagery Map Export
+  try {
+    var r = 6378137.0;
+    var xmin = minX * Math.PI / 180 * r;
+    var xmax = maxX * Math.PI / 180 * r;
+    var ymin = Math.log(Math.tan((90 + minY) * Math.PI / 360)) * r;
+    var ymax = Math.log(Math.tan((90 + maxY) * Math.PI / 360)) * r;
+
+    var dx = (xmax - xmin) || 500, dy = (ymax - ymin) || 500;
+    xmin -= dx * 0.25; xmax += dx * 0.25;
+    ymin -= dy * 0.25; ymax += dy * 0.25;
+
+    var esriUrl = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox='
+        + Math.round(xmin) + ',' + Math.round(ymin) + ',' + Math.round(xmax) + ',' + Math.round(ymax)
+        + '&bboxSR=102100&size=160,108&imageSR=102100&format=jpg&f=image';
+
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      ctx.drawImage(img, 0, 0, W, H);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(0, 0, W, H);
+      drawWaypointsOverlay();
+    };
+    img.onerror = function() {
+      drawWaypointsOverlay();
+    };
+    img.src = esriUrl;
+  } catch(e) {
+    drawWaypointsOverlay();
+  }
+}
+
+async function parseKmzWaypoints(b64){
+  try {
+    if(!b64) return {wpCount:0, coords:[]};
+    var zip = await JSZip.loadAsync(b64, {base64: true});
+    var coords = [];
+    var wpCount = 0;
+
+    // Prioridad 1: waylines.wpml (Estándar oficial DJI Fly de ejecución)
+    var waylinesFile = null;
+    for(var fn of Object.keys(zip.files)){
+      if(fn.toLowerCase().indexOf('waylines.wpml') !== -1){
+        waylinesFile = zip.files[fn];
+        break;
+      }
+    }
+
+    if(waylinesFile){
+      var wXml = await waylinesFile.async('text');
+      var reWp = /<Placemark[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Placemark>/gi, m;
+      while((m = reWp.exec(wXml)) !== null){
+        var parts = m[1].trim().split(/[,\\s]+/);
+        if(parts.length >= 2){
+          var lo = parseFloat(parts[0]), la = parseFloat(parts[1]);
+          if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)){
+            coords.push([lo, la]);
+          }
+        }
+      }
+      wpCount = coords.length;
+      if(wpCount > 0) return {wpCount: wpCount, coords: coords};
+    }
+
+    // Prioridad 2: doc.kml o KML de Google Earth (extraer solo de LineString o Placemarks)
+    var kmlFile = null;
+    for(var fn of Object.keys(zip.files)){
+      if(fn.toLowerCase().endsWith('.kml') && fn.toLowerCase().indexOf('template') === -1){
+        kmlFile = zip.files[fn];
+        break;
+      }
+    }
+
+    if(kmlFile){
+      var kXml = await kmlFile.async('text');
+      // Intentar LineString
+      var lsMatch = /<LineString[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/LineString>/i.exec(kXml);
+      if(lsMatch && lsMatch[1]){
+        var tokens = lsMatch[1].trim().split(/\s+/);
+        tokens.forEach(function(tok){
+          var c = tok.split(',');
+          if(c.length >= 2){
+            var lo = parseFloat(c[0]), la = parseFloat(c[1]);
+            if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)) coords.push([lo, la]);
+          }
+        });
+        wpCount = coords.length;
+        if(wpCount > 0) return {wpCount: wpCount, coords: coords};
+      }
+
+      // Si no hubo LineString, buscar Points individuales
+      var ptRe = /<Point[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Point>/gi, pm;
+      while((pm = ptRe.exec(kXml)) !== null){
+        var c = pm[1].trim().split(/[,\\s]+/);
+        if(c.length >= 2){
+          var lo = parseFloat(c[0]), la = parseFloat(c[1]);
+          if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)) coords.push([lo, la]);
+        }
+      }
+      wpCount = coords.length;
+      return {wpCount: wpCount, coords: coords};
+    }
+
+    return {wpCount: 0, coords: []};
+  } catch(e) {
+    return {wpCount: 0, coords: []};
+  }
+}
+
+function refreshAll(){
+  if(!S.connected && window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+    window.AndroidBridge.refreshUsb();
+  }
+  refreshDeviceSlots();
+  refreshLocalMissions();
+}
+
+function forceReconnectUsb(){
+  if(window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+    window.AndroidBridge.refreshUsb();
+  }
+  refreshDeviceSlots();
+  refreshLocalMissions();
+}
+
+function refreshDeviceSlots(){
+  document.getElementById('list-dev').innerHTML = '<div class="empty"><span class="spin">⏳</span> Escaneando RC 2...</div>';
+  if(window.AndroidBridge){
+    if(window.AndroidBridge.fetchDeviceSlotsAsync){
+      window.AndroidBridge.fetchDeviceSlotsAsync();
+    } else if(window.AndroidBridge.getDeviceSlotsJson){
+      try {
+        var raw = window.AndroidBridge.getDeviceSlotsJson();
+        onDeviceSlotsLoaded(raw);
+      } catch(e) { renderDeviceSlots(); }
+    }
+  }
+}
+
+async function onDeviceSlotsLoaded(rawJson){
+  try {
+    var list = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    S.deviceSlots = list || [];
+    for(var s of S.deviceSlots){
+      if((!s.coords || s.coords.length === 0) && s.base64){
+        var p = await parseKmzWaypoints(s.base64);
+        if(p.wpCount > 0) s.wpCount = p.wpCount;
+        s.coords = p.coords;
+      }
+    }
+  } catch(e) {
+    S.deviceSlots = [];
+  }
+  renderDeviceSlots();
+}
+
+function refreshLocalMissions(){
+  document.getElementById('list-local').innerHTML = '<div class="empty"><span class="spin">⏳</span> Escaneando descargas...</div>';
+  if(window.AndroidBridge){
+    if(window.AndroidBridge.fetchLocalMissionsAsync){
+      window.AndroidBridge.fetchLocalMissionsAsync();
+    } else if(window.AndroidBridge.getLocalMissionsJson){
+      try {
+        onLocalMissionsLoaded(window.AndroidBridge.getLocalMissionsJson());
+      } catch(e) {}
+    }
+  }
+}
+
+async function onLocalMissionsLoaded(rawJson){
+  try {
+    var list = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    S.localMissions = list || [];
+    for(var m of S.localMissions){
+      if((!m.coords || m.coords.length === 0) && m.base64){
+        var p = await parseKmzWaypoints(m.base64);
+        m.wpCount = p.wpCount;
+        m.coords = p.coords;
+      }
+    }
+    renderLocalMissions();
+  } catch(e) {
+    appendLog('Error leyendo locales: ' + e.message);
+    renderLocalMissions();
+  }
+}
+
+function pickLocalFile(){
+  if(window.AndroidBridge && window.AndroidBridge.pickFile) window.AndroidBridge.pickFile();
+}
+
+function injectSelectedLocalToDevice(){
+  if(!S.selLocalMission){ alert('Selecciona una misión local primero.'); return; }
+  var guid = S.selDeviceGuid || (S.deviceSlots.length > 0 ? S.deviceSlots[0].guid : null);
+  if(!guid){ alert('No hay ranura en RC 2 seleccionada.'); return; }
+
+  var slotObj = S.deviceSlots.find(s => s.guid === guid);
+  var targetName = slotObj ? ((slotObj.displayName && slotObj.displayName !== slotObj.guid) ? slotObj.displayName : shortGuid(guid)) : shortGuid(guid);
+  var selWp = S.selLocalMission.wpCount ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
+
+  if(!confirm('¿Sobreescribir la misión "' + targetName + '" en RC 2 con "' + S.selLocalMission.name + selWp + '"?')) return;
+
+  appendLog('[MTP] Sobreescribiendo ' + S.selLocalMission.name + selWp + ' hacia ' + targetName + '...');
+  var syncBtn = document.getElementById('btn-sync');
+  if(syncBtn){ syncBtn.disabled = true; syncBtn.textContent = '⏳ INYECTANDO EN RC 2...'; }
+  if(window.AndroidBridge && window.AndroidBridge.overwriteSlotFromLocal){
+    var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
+    var ok = window.AndroidBridge.overwriteSlotFromLocal(guid, targetFileParam);
+    setTimeout(function(){
+      if(syncBtn){ syncBtn.disabled = false; syncBtn.textContent = '⚡ SOBREESCRIBIR EN RC 2'; }
+      refreshDeviceSlots();
+    }, 2500);
+  }
+}
+
+function createSelectedLocalAsNewDeviceSlot(){
+  if(!S.selLocalMission){ alert('Selecciona una misión local primero.'); return; }
+
+  var selWp = S.selLocalMission.wpCount ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
+  if(!confirm('¿Crear una NUEVA misión en DJI Fly (RC 2) basada en "' + S.selLocalMission.name + selWp + '"?')) return;
+
+  appendLog('[MTP] Creando nueva misión en RC 2 desde ' + S.selLocalMission.name + selWp + '...');
+  var newBtn = document.getElementById('btn-new');
+  if(newBtn){ newBtn.disabled = true; newBtn.textContent = '⏳ CREANDO EN RC 2...'; }
+  if(window.AndroidBridge && window.AndroidBridge.createNewSlotFromLocal){
+    var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
+    var ok = window.AndroidBridge.createNewSlotFromLocal(targetFileParam);
+    setTimeout(function(){
+      if(newBtn){ newBtn.disabled = false; newBtn.textContent = '➕ CREAR NUEVA MISIÓN EN RC 2'; }
+      refreshDeviceSlots();
+    }, 2500);
+  }
+}
+
+function downloadSelectedDeviceSlot(){
+  if(!S.selDeviceGuid){ alert('Selecciona una ranura del control remoto.'); return; }
+  if(window.AndroidBridge && window.AndroidBridge.downloadDeviceSlot) window.AndroidBridge.downloadDeviceSlot(S.selDeviceGuid);
+}
+
+function openMissionInGoogleEarth(fileName, e){
+  if(e) e.stopPropagation();
+  if(window.AndroidBridge && window.AndroidBridge.openInGoogleEarth){
+    window.AndroidBridge.openInGoogleEarth(fileName);
+  }
+}
+
+function openDeviceSlotInGoogleEarth(guid, e){
+  if(e) e.stopPropagation();
+  if(window.AndroidBridge && window.AndroidBridge.openInGoogleEarth){
+    window.AndroidBridge.openInGoogleEarth(guid);
+  }
+}
+
+function deleteLocalMissionItem(fileName, e){
+  if(e) e.stopPropagation();
+  if(!confirm('¿Eliminar la misión local "' + fileName + '" del teléfono?')) return;
+  if(window.AndroidBridge && window.AndroidBridge.deleteLocalMission){
+    window.AndroidBridge.deleteLocalMission(fileName);
+  }
+}
+
+function deleteDeviceSlotItem(guid, displayName, e){
+  if(e) e.stopPropagation();
+  var nameStr = displayName || shortGuid(guid);
+  if(!confirm('¿Eliminar la misión "' + nameStr + '" del control RC 2?')) return;
+  if(window.AndroidBridge && window.AndroidBridge.deleteDeviceSlot){
+    window.AndroidBridge.deleteDeviceSlot(guid);
+  }
+}
+
+function openPathModal(){
+  var cur = (window.AndroidBridge && window.AndroidBridge.getCustomRc2Path) ? window.AndroidBridge.getCustomRc2Path() : '';
+  document.getElementById('rc2-path-input').value = cur || 'Android/data/dji.go.v5/files/Waypoint';
+  document.getElementById('path-modal').style.display = 'flex';
+}
+
+function closePathModal(){
+  document.getElementById('path-modal').style.display = 'none';
+}
+
+function setPresetPath(path){
+  document.getElementById('rc2-path-input').value = path;
+}
+
+function saveCustomPath(){
+  var val = document.getElementById('rc2-path-input').value.trim();
+  if(window.AndroidBridge && window.AndroidBridge.setCustomRc2Path){
+    window.AndroidBridge.setCustomRc2Path(val);
+  }
+  closePathModal();
+  refreshDeviceSlots();
+}
+
+function resetPathToDefault(){
+  if(window.AndroidBridge && window.AndroidBridge.setCustomRc2Path){
+    window.AndroidBridge.setCustomRc2Path('');
+  }
+  document.getElementById('rc2-path-input').value = '';
+  closePathModal();
+  refreshDeviceSlots();
+}
+
+window.onload = function(){
+  switchTab('dev');
+  refreshAll();
+};
+
 </script>
 </body>
 </html>
