@@ -50,9 +50,9 @@
        SIDEBAR / LEFT DRAWER (Resizable / Collapsible)
        ========================================================= */
     #sidebar {
-      width: 380px;
-      min-width: 340px;
-      max-width: 440px;
+      width: 33.33vw !important;
+      min-width: 300px;
+      max-width: 35vw !important;
       background: var(--bg-panel);
       display: flex;
       flex-direction: column;
@@ -252,11 +252,11 @@
        ========================================================= */
     .stats-header-card {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       background: var(--bg-subtle);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 10px 6px;
+      padding: 10px 4px;
       margin-bottom: 4px;
     }
 
@@ -746,32 +746,32 @@
 
     .map-top-left-controls {
       position: absolute;
-      top: 18px;
-      left: 18px;
+      top: 8px;
+      left: 10px;
       z-index: 1000;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 5px;
     }
 
     .map-btn-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .map-action-square-btn {
-      width: 44px;
-      height: 44px;
+      width: 36px;
+      height: 36px;
       background: #ffffff;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       box-shadow: var(--shadow-md);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 1.15rem;
+      font-size: 1.05rem;
       color: #1e293b;
       transition: all 0.15s;
     }
@@ -781,14 +781,14 @@
     }
 
     .map-reset-btn {
-      height: 44px;
-      padding: 0 18px;
+      height: 36px;
+      padding: 0 12px;
       background: var(--accent-red);
       color: #ffffff;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       box-shadow: var(--shadow-md);
-      font-size: 0.9rem;
+      font-size: 0.82rem;
       font-weight: 700;
       cursor: pointer;
       display: flex;
@@ -804,36 +804,36 @@
 
     .map-points-badge {
       background: #ffffff;
-      padding: 6px 14px;
+      padding: 3px 10px;
       border-radius: 9999px;
-      font-size: 0.78rem;
+      font-size: 0.70rem;
       font-weight: 600;
       color: #334155;
       box-shadow: var(--shadow-sm);
       width: fit-content;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .map-points-badge::before {
       content: "";
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: var(--accent-green);
     }
 
     .map-bottom-left-controls {
       position: absolute;
-      bottom: 20px;
-      left: 18px;
+      bottom: 12px;
+      left: 12px;
       z-index: 1000;
     }
 
     .map-undo-btn {
-      width: 44px;
-      height: 44px;
+      width: 36px;
+      height: 36px;
       background: #ffffff;
       border: none;
       border-radius: 50%;
@@ -842,7 +842,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 1.25rem;
+      font-size: 1.15rem;
       color: #1e293b;
       transition: all 0.15s;
     }
@@ -853,24 +853,24 @@
 
     .map-right-toolbar {
       position: absolute;
-      top: 18px;
-      right: 18px;
+      top: 48px;
+      right: 10px;
       z-index: 1000;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 5px;
     }
 
     .tool-btn-item {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 0;
     }
 
     .tool-circle-btn {
-      width: 46px;
-      height: 46px;
+      width: 35px;
+      height: 35px;
       background: #ffffff;
       border: none;
       border-radius: 50%;
@@ -879,7 +879,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 1.15rem;
+      font-size: 1.0rem;
       color: #1e293b;
       transition: all 0.15s;
     }
@@ -894,33 +894,29 @@
     }
 
     .tool-label {
-      font-size: 0.65rem;
-      font-weight: 700;
-      color: #ffffff;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-      letter-spacing: 0.3px;
+      display: none !important;
     }
 
     .map-bottom-right-controls {
       position: absolute;
-      bottom: 22px;
-      right: 22px;
+      bottom: 12px;
+      right: 12px;
       z-index: 1000;
     }
 
     .map-floating-next-btn {
-      padding: 13px 32px;
+      padding: 9px 20px;
       background: var(--primary);
       color: #ffffff;
       border: none;
       border-radius: 9999px;
-      font-size: 0.98rem;
+      font-size: 0.88rem;
       font-weight: 800;
       box-shadow: var(--shadow-lg);
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       transition: all 0.15s;
     }
 
@@ -1084,29 +1080,30 @@
 /* ==================== TOP-RIGHT NAV SWITCHER ==================== */
 .app-top-nav-switcher {
   position: absolute;
-  top: 10px;
-  right: 18px;
+  top: 8px;
+  right: 10px;
   z-index: 1500;
   display: flex;
   background: rgba(18, 20, 26, 0.94);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 20px;
-  padding: 4px;
+  border-radius: 16px;
+  padding: 2px 4px;
   box-shadow: 0 4px 18px rgba(0,0,0,0.6);
+  height: 34px;
 }
 .nav-tab-btn {
   background: transparent;
   border: none;
   color: #949ba9;
-  padding: 7px 16px;
-  font-size: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
   font-weight: 700;
-  border-radius: 16px;
+  border-radius: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   transition: all 0.2s ease;
 }
 .nav-tab-btn.active {
@@ -1640,6 +1637,10 @@
             <span class="stat-chip-icon">📍</span>
             <span class="stat-chip-val" id="stat-waypoints">0</span>
           </div>
+          <div class="stat-chip">
+            <span class="stat-chip-icon">🎯</span>
+            <span class="stat-chip-val" id="stat-gsd">1.5 cm</span>
+          </div>
         </div>
 
         <!-- Camera Model -->
@@ -1987,7 +1988,13 @@
       <div class="modal-subtext-blue">
         Selecciona un archivo .kml o .kmz con un polígono o ruta de coordenadas para cargarlo directamente en el mapa.
       </div>
-      <input type="file" id="kml-file-input" accept=".kml,.kmz" class="modal-input" onchange="handleKmlFileSelected(event)" />
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+        <button type="button" onclick="triggerNativeKmlPicker()" style="padding:12px; background:linear-gradient(135deg, #1e88e5, #00b0ff); color:#fff; border:none; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 3px 10px rgba(30,136,229,0.35);">
+          📂 Abrir explorador de archivos nativo
+        </button>
+        <div style="font-size:11px; text-align:center; color:#64748b;">o seleccionar archivo local:</div>
+        <input type="file" id="kml-file-input" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,*/*" class="modal-input" onchange="handleKmlFileSelected(event)" />
+      </div>
       <div class="modal-actions">
         <button class="modal-btn-close" onclick="closeModal('modal-kml-import')">Cerrar</button>
       </div>
@@ -2127,9 +2134,18 @@
       }).setView(defaultCenter, 17);
       window.leafletMap = map;
 
-      L.tileLayer('https://mt1.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
-        maxZoom: 20
-      }).addTo(map);
+      // High-res Google Satellite Hybrid with multi-subdomains mt0-mt3
+      const googleSat = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        maxZoom: 21,
+        attribution: 'Google Satellite'
+      });
+      const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Esri Satellite'
+      });
+      googleSat.addTo(map);
+      window.mapSatLayers = { google: googleSat, esri: esriSat };
 
       polygonLayer = L.featureGroup().addTo(map);
       flightLinesLayer = L.featureGroup().addTo(map);
@@ -2408,15 +2424,19 @@
       const areaM2 = computePolygonArea(AppState.points);
       const areaHa = (areaM2 / 10000).toFixed(2);
       const areaStr = `${areaHa} ha`;
+      const gsd = ((AppState.altitude * cam.sensorW * 100) / (cam.focal * cam.imgW)).toFixed(2);
+      const gsdStr = `${gsd} cm`;
 
-      updateStatDisplay(timeStr, distStr, areaStr, gridWaypoints.length);
+      updateStatDisplay(timeStr, distStr, areaStr, gridWaypoints.length, gsdStr);
     }
 
-    function updateStatDisplay(time, dist, area, wps) {
+    function updateStatDisplay(time, dist, area, wps, gsd) {
       document.getElementById('stat-time').textContent = time || '0:00';
       document.getElementById('stat-distance').textContent = dist || '0.0 km';
       document.getElementById('stat-area').textContent = area || '0.0 ha';
       document.getElementById('stat-waypoints').textContent = wps || '0';
+      const gsdElem = document.getElementById('stat-gsd');
+      if (gsdElem) gsdElem.textContent = gsd || '1.5 cm';
     }
 
     function computePolygonArea(pts) {
@@ -2587,46 +2607,133 @@
     function openMbtilesModal() { openModal('modal-mbtiles'); }
     function openKmlImportModal() { openModal('modal-kml-import'); }
 
-    function handleKmlFileSelected(e) {
+    function triggerNativeKmlPicker() {
+      if (window.AndroidBridge && window.AndroidBridge.openNativeKmlPicker) {
+        window.AndroidBridge.openNativeKmlPicker();
+      } else {
+        const inp = document.getElementById('kml-file-input');
+        if (inp) inp.click();
+      }
+    }
+
+    async function handleImportedKmlBase64(base64Data, fileName) {
+      try {
+        if (!base64Data) return;
+        const isKmz = fileName && fileName.toLowerCase().endsWith('.kmz');
+        if (isKmz && typeof JSZip !== 'undefined') {
+          const zip = await JSZip.loadAsync(base64Data, { base64: true });
+          let kmlText = null;
+          for (let name of Object.keys(zip.files)) {
+            if (name.toLowerCase().endsWith('.kml')) {
+              kmlText = await zip.files[name].async('text');
+              break;
+            }
+          }
+          if (kmlText) {
+            applyKmlTextToMap(kmlText, fileName);
+            return;
+          }
+        }
+        const binaryStr = atob(base64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+        const decoder = new TextDecoder('utf-8');
+        const text = decoder.decode(bytes);
+        applyKmlTextToMap(text, fileName);
+      } catch (e) {
+        console.error("Error processing KML base64:", e);
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("Error procesando KML: " + e.message);
+        }
+      }
+    }
+
+    async function handleKmlFileSelected(e) {
       const file = e.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        try {
-          const text = evt.target.result;
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(text, "text/xml");
-          const coordsElem = xmlDoc.querySelector("coordinates");
-          if (coordsElem) {
-            const rawCoords = coordsElem.textContent.trim().split(/\s+/);
-            const newPoints = [];
-            rawCoords.forEach(str => {
-              const parts = str.split(",");
-              if (parts.length >= 2) {
-                const lng = parseFloat(parts[0]);
-                const lat = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                  newPoints.push(L.latLng(lat, lng));
-                }
-              }
-            });
-            if (newPoints.length >= 3) {
-              AppState.points = newPoints;
-              renderBoundary();
-              recalculateMission();
-              map.fitBounds(L.latLngBounds(newPoints));
-              closeModal('modal-kml-import');
-              if (window.AndroidBridge && window.AndroidBridge.showToast) {
-                window.AndroidBridge.showToast("Polígono KML importado con éxito");
-              }
+      try {
+        if (file.name.toLowerCase().endsWith('.kmz') && typeof JSZip !== 'undefined') {
+          const zip = await JSZip.loadAsync(file);
+          let kmlText = null;
+          for (let name of Object.keys(zip.files)) {
+            if (name.toLowerCase().endsWith('.kml')) {
+              kmlText = await zip.files[name].async('text');
+              break;
             }
           }
-        } catch (err) {
-          alert("Error al leer el archivo KML: " + err.message);
+          if (kmlText) {
+            applyKmlTextToMap(kmlText, file.name);
+            return;
+          }
         }
-      };
-      reader.readAsText(file);
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          applyKmlTextToMap(evt.target.result, file.name);
+        };
+        reader.readAsText(file);
+      } catch (err) {
+        alert("Error al leer el archivo KML/KMZ: " + err.message);
+      }
+    }
+
+    function applyKmlTextToMap(kmlText, fileName) {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+        const newPoints = [];
+
+        // Check 1: <coordinates> elements
+        const coordsElems = xmlDoc.querySelectorAll("coordinates");
+        for (let coordsElem of coordsElems) {
+          const rawCoords = coordsElem.textContent.trim().split(/\s+/);
+          rawCoords.forEach(str => {
+            const parts = str.split(",");
+            if (parts.length >= 2) {
+              const lng = parseFloat(parts[0]);
+              const lat = parseFloat(parts[1]);
+              if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                newPoints.push(L.latLng(lat, lng));
+              }
+            }
+          });
+          if (newPoints.length >= 3) break;
+        }
+
+        // Check 2: DJI WPML format <wpml:waypoint>
+        if (newPoints.length < 3) {
+          const wpmlPoints = xmlDoc.querySelectorAll("Point > coordinates, waypoint");
+          wpmlPoints.forEach(wp => {
+            const txt = wp.textContent.trim();
+            const parts = txt.split(",");
+            if (parts.length >= 2) {
+              const lng = parseFloat(parts[0]);
+              const lat = parseFloat(parts[1]);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                newPoints.push(L.latLng(lat, lng));
+              }
+            }
+          });
+        }
+
+        if (newPoints.length >= 3) {
+          AppState.points = newPoints;
+          renderBoundary();
+          recalculateMission();
+          map.fitBounds(L.latLngBounds(newPoints));
+          closeModal('modal-kml-import');
+          const name = fileName || "KML";
+          if (window.AndroidBridge && window.AndroidBridge.showToast) {
+            window.AndroidBridge.showToast("Polígono importado con éxito: " + name);
+          }
+        } else {
+          alert("No se encontraron suficientes coordenadas (mínimo 3) en el archivo KML/KMZ.");
+        }
+      } catch (err) {
+        console.error("Error parsing KML:", err);
+        alert("Error al parsear el KML: " + err.message);
+      }
     }
 
     function locateUserPosition() {

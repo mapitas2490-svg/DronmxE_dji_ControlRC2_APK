@@ -18,6 +18,8 @@ import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
+import android.webkit.ValueCallback;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
@@ -56,6 +58,30 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
     private final List<String> pendingJsCalls = new ArrayList<>();
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
 
+    private ValueCallback<Uri[]> mUploadMessage;
+    private final ActivityResultLauncher<Intent> chromeFilePickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (mUploadMessage != null) {
+                    Uri[] results = null;
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Intent data = result.getData();
+                        if (data.getClipData() != null) {
+                            int count = data.getClipData().getItemCount();
+                            results = new Uri[count];
+                            for (int i = 0; i < count; i++) {
+                                results[i] = data.getClipData().getItemAt(i).getUri();
+                            }
+                        } else if (data.getData() != null) {
+                            results = new Uri[]{data.getData()};
+                        }
+                    }
+                    mUploadMessage.onReceiveValue(results);
+                    mUploadMessage = null;
+                }
+            }
+    );
+
     private final ActivityResultLauncher<Intent> filePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -87,6 +113,10 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         settings.setAllowContentAccess(true);
         settings.setAllowFileAccessFromFileURLs(true);
         settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setDatabaseEnabled(true);
+        settings.setGeolocationEnabled(true);
 
         webView.addJavascriptInterface(new BridgeInterface(), "AndroidBridge");
 
@@ -112,6 +142,30 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         .setCancelable(false)
                         .show();
                 return true;
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (mUploadMessage != null) {
+                    mUploadMessage.onReceiveValue(null);
+                    mUploadMessage = null;
+                }
+                mUploadMessage = filePathCallback;
+                try {
+                    Intent intent = fileChooserParams.createIntent();
+                    chromeFilePickerLauncher.launch(intent);
+                } catch (Exception e) {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                    chromeFilePickerLauncher.launch(intent);
+                }
+                return true;
+            }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                callback.invoke(origin, true, false);
             }
         });
         webView.setWebViewClient(new android.webkit.WebViewClient() {
@@ -222,6 +276,15 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
             }
 
+            if (displayName.toLowerCase().endsWith(".kml") || displayName.toLowerCase().endsWith(".kmz")) {
+                try {
+                    byte[] fileBytes = java.nio.file.Files.readAllBytes(tempFile.toPath());
+                    String b64 = Base64.encodeToString(fileBytes, Base64.NO_WRAP);
+                    String safeName = JSONObject.quote(displayName);
+                    notifyJs("handleImportedKmlBase64('" + b64 + "', " + safeName + ");");
+                } catch (Exception ignored) {}
+            }
+
             synchronized (availableKmzFiles) {
                 if (!availableKmzFiles.contains(tempFile)) {
                     availableKmzFiles.add(0, tempFile);
@@ -290,6 +353,22 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
     }
 
     public class BridgeInterface {
+
+        @JavascriptInterface
+        public void openNativeKmlPicker() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                    String[] mimeTypes = {"application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/octet-stream", "text/xml", "*/*"};
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+                    filePickerLauncher.launch(intent);
+                } catch (Exception e) {
+                    showToast("Error abriendo selector: " + e.getMessage());
+                }
+            });
+        }
 
         @JavascriptInterface
         public String getDeviceSlotsJson() {
