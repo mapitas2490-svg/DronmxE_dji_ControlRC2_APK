@@ -166,6 +166,11 @@ public class MtpHelper {
         }
     }
 
+    public void forceReconnect() {
+        closeConnection();
+        findAndConnectDevice();
+    }
+
     public void findAndConnectDevice() {
         synchronized (mtpLock) {
             if (mtpDevice != null && currentConnection != null) {
@@ -174,6 +179,8 @@ public class MtpHelper {
                     if (sids != null && sids.length > 0) {
                         callback.onDeviceStatus(true, "DJI RC 2 Conectado y Listo");
                         return;
+                    } else {
+                        closeConnection();
                     }
                 } catch (Exception ignored) {
                     closeConnection();
@@ -315,7 +322,11 @@ public class MtpHelper {
         List<DeviceSlotInfo> slots = new ArrayList<>();
         MtpDevice device;
         synchronized (mtpLock) { device = mtpDevice; }
-        if (device == null) { isScanning = false; return slots; }
+        if (device == null) {
+            isScanning = false;
+            mtpExecutor.execute(this::findAndConnectDevice);
+            return slots;
+        }
 
         try {
             int[] storageIds = null;
@@ -333,7 +344,7 @@ public class MtpHelper {
             if (storageIds == null || storageIds.length == 0) {
                 callback.onDeviceStatus(true, "Conectado (bloqueado)");
                 callback.onLog("[!] RC 2 no expone unidades. Selecciona 'Transferencia de Archivos' en el control.");
-                isScanning = false;
+                closeConnection();
                 return slots;
             }
 

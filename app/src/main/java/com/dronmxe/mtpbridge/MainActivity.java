@@ -811,7 +811,13 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
         @JavascriptInterface
         public void refreshUsb() {
-            new Thread(() -> mtpHelper.findAndConnectDevice()).start();
+            new Thread(() -> {
+                if (mtpHelper != null) {
+                    mtpHelper.forceReconnect();
+                    try { Thread.sleep(1200); } catch (Exception ignored) {}
+                    fetchDeviceSlotsAsync();
+                }
+            }).start();
         }
 
         @JavascriptInterface
