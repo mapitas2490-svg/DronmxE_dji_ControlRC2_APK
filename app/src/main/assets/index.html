@@ -1256,6 +1256,34 @@ function directSyncLocalMission(mName, e) {
 .btn-mission-lock:hover {
   transform: scale(1.08);
 }
+.btn-mission-params {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+.btn-mission-params:hover {
+  transform: scale(1.08);
+  background: #bae6fd;
+}
+.btn-mission-delete {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+.btn-mission-delete:hover {
+  transform: scale(1.08);
+  background: #fecaca;
+}
 .map-lock-status-badge {
   display: inline-flex;
   align-items: center;
@@ -1873,12 +1901,7 @@ function directSyncLocalMission(mName, e) {
         </button>
       </div>
 
-      <!-- Mode Selector: Area, Lineal, 3D -->
-      <div class="mode-tab-bar">
-        <div class="mode-tab active" onclick="setMissionMode('Area')">Área</div>
-        <div class="mode-tab" onclick="setMissionMode('Lineal')">Lineal</div>
-        <div class="mode-tab" onclick="setMissionMode('3D')">Vuelo 3D</div>
-      </div>
+
 
       <!-- Missions Library List -->
       <div class="drawer-content">
@@ -1943,6 +1966,16 @@ function directSyncLocalMission(mName, e) {
             <option value="DJI_MINI_5_PRO">DJI Mini 5 Pro (1/1.3" CMOS 48MP, 24mm)</option>
             <option value="DJI_MAVIC_3_PRO">DJI Mavic 3 Pro (4/3" CMOS 20MP, 24mm)</option>
           </select>
+        </div>
+
+        <!-- Sensor Resolution: 50 MP vs 12 MP (or 48 MP vs 12 MP) -->
+        <div class="config-group" id="cfg-res-group">
+          <label class="config-label">Resolución del Sensor CMOS</label>
+          <div class="segmented-control" id="res-segmented-control">
+            <button class="segmented-btn active" id="btn-res-high" onclick="setSensorResolution('HIGH')">50 MP (Alta Res)</button>
+            <button class="segmented-btn" id="btn-res-binned" onclick="setSensorResolution('BINNING')">12 MP (Binning)</button>
+          </div>
+          <div class="config-subtext" id="disp-res-detail">Sensor 1" CMOS: 8192 × 5464 px · Máximo detalle GSD</div>
         </div>
 
         <!-- Altitude Mode: Take Off vs Ground -->
@@ -2069,14 +2102,6 @@ function directSyncLocalMission(mName, e) {
             <span>➕</span> Nuevo
           </button>
           <span class="msc-mission-title" id="msc-mission-title">Misión 1</span>
-          <div class="msc-actions">
-            <!-- 1. Candado -->
-            <button class="msc-action-btn" id="msc-btn-lock" title="Bloquear / Desbloquear geometría" onclick="toggleCurrentMissionLock()">🔒</button>
-            <!-- 2. Basurita -->
-            <button class="msc-action-btn btn-trash" id="msc-btn-delete" title="Eliminar misión actual" onclick="deleteCurrentMission()">🗑️</button>
-            <!-- 3. Editar Parámetros -->
-            <button class="msc-action-btn btn-params" id="msc-btn-params" title="Editar parámetros fotogramétricos" onclick="switchToView('config')">⚙️</button>
-          </div>
         </div>
         <div class="msc-bottom-row">
           <div class="map-points-badge" id="map-points-badge">0 puntos — esperando</div>
@@ -2118,12 +2143,7 @@ function directSyncLocalMission(mName, e) {
       </div>
     </div>
 
-    <!-- Floating Bottom-Right: Next Button -->
-    <div class="map-bottom-right-controls" id="map-next-container">
-      <button class="map-floating-next-btn" onclick="switchToView('config')">
-        Siguiente →
-      </button>
-    </div>
+
   </div>
 
   <!-- =========================================================
@@ -2360,6 +2380,7 @@ function directSyncLocalMission(mName, e) {
       gridAngle: 0,
       signalLossContinue: false, // Regreso a Home por defecto
       camera: 'DJI_AIR_3S', // DEFAULT ALWAYS AIR 3S
+      sensorResolution: 'HIGH', // HIGH (50MP/48MP/20MP) or BINNING (12MP)
       points: [], // LatLng vertices
       waylines: [], // Calculated flight waypoints
       activeSlotGuid: 'NEW',
@@ -2367,14 +2388,121 @@ function directSyncLocalMission(mName, e) {
     };
 
     // Camera optical and sensor specifications
-    // DJI Air 3S: 1" CMOS (13.2 x 8.8mm), 8.4mm focal length (24mm eq), 8192x5464 (50MP), droneId 90
+    // DJI Air 3S: 1" CMOS (13.2 x 8.8mm), 8.4mm focal length (24mm eq), 50MP vs 12MP binning, droneId 90
     const CameraSpecs = {
-      DJI_AIR_3S: { name: 'DJI Air 3S', sensorW: 13.2, sensorH: 8.8, focal: 8.4, imgW: 8192, imgH: 5464, droneId: 90 },
-      DJI_MAVIC_3_ENTERPRISE: { name: 'DJI Mavic 3 Enterprise', sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 67 },
-      DJI_MINI_4_PRO: { name: 'DJI Mini 4 Pro', sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
-      DJI_MINI_5_PRO: { name: 'DJI Mini 5 Pro', sensorW: 9.8, sensorH: 7.3, focal: 6.72, imgW: 8064, imgH: 6048, droneId: 68 },
-      DJI_MAVIC_3_PRO: { name: 'DJI Mavic 3 Pro', sensorW: 17.3, sensorH: 13.0, focal: 12.29, imgW: 5280, imgH: 3956, droneId: 60 }
+      DJI_AIR_3S: { 
+        name: 'DJI Air 3S', 
+        sensorW: 13.2, 
+        sensorH: 8.8, 
+        focal: 8.4, 
+        droneId: 90,
+        resolutions: {
+          HIGH: { label: '50 MP (Alta Res)', detail: 'Sensor 1" CMOS: 8192 × 5464 px · Máximo detalle GSD', imgW: 8192, imgH: 5464 },
+          BINNING: { label: '12 MP (Binning)', detail: 'Sensor 1" CMOS (Pixel Binning 4-en-1): 4096 × 2732 px · Captura rápida', imgW: 4096, imgH: 2732 }
+        }
+      },
+      DJI_MAVIC_3_ENTERPRISE: { 
+        name: 'DJI Mavic 3 Enterprise', 
+        sensorW: 17.3, 
+        sensorH: 13.0, 
+        focal: 12.29, 
+        droneId: 67,
+        resolutions: {
+          HIGH: { label: '20 MP (Mecánico)', detail: 'Sensor 4/3" CMOS: 5280 × 3956 px · Obturador Mecánico', imgW: 5280, imgH: 3956 }
+        }
+      },
+      DJI_MINI_4_PRO: { 
+        name: 'DJI Mini 4 Pro', 
+        sensorW: 9.8, 
+        sensorH: 7.3, 
+        focal: 6.72, 
+        droneId: 68,
+        resolutions: {
+          HIGH: { label: '48 MP (Alta Res)', detail: 'Sensor 1/1.3" CMOS: 8064 × 6048 px · 48 MP', imgW: 8064, imgH: 6048 },
+          BINNING: { label: '12 MP (Binning)', detail: 'Sensor 1/1.3" CMOS: 4032 × 3024 px · 12 MP Binning', imgW: 4032, imgH: 3024 }
+        }
+      },
+      DJI_MINI_5_PRO: { 
+        name: 'DJI Mini 5 Pro', 
+        sensorW: 9.8, 
+        sensorH: 7.3, 
+        focal: 6.72, 
+        droneId: 68,
+        resolutions: {
+          HIGH: { label: '48 MP (Alta Res)', detail: 'Sensor 1/1.3" CMOS: 8064 × 6048 px · 48 MP', imgW: 8064, imgH: 6048 },
+          BINNING: { label: '12 MP (Binning)', detail: 'Sensor 1/1.3" CMOS: 4032 × 3024 px · 12 MP Binning', imgW: 4032, imgH: 3024 }
+        }
+      },
+      DJI_MAVIC_3_PRO: { 
+        name: 'DJI Mavic 3 Pro', 
+        sensorW: 17.3, 
+        sensorH: 13.0, 
+        focal: 12.29, 
+        droneId: 60,
+        resolutions: {
+          HIGH: { label: '20 MP (Principal)', detail: 'Sensor 4/3" CMOS: 5280 × 3956 px · 20 MP', imgW: 5280, imgH: 3956 },
+          BINNING: { label: '12 MP (Binning)', detail: 'Sensor 4/3" CMOS: 4000 × 3000 px · 12 MP', imgW: 4000, imgH: 3000 }
+        }
+      }
     };
+
+    function getEffectiveCameraSpecs() {
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_AIR_3S;
+      const resKey = (cam.resolutions && cam.resolutions[AppState.sensorResolution]) ? AppState.sensorResolution : 'HIGH';
+      const resObj = (cam.resolutions && cam.resolutions[resKey]) || (cam.resolutions && cam.resolutions.HIGH) || { imgW: 8192, imgH: 5464, label: '50 MP', detail: '' };
+      return {
+        ...cam,
+        imgW: resObj.imgW,
+        imgH: resObj.imgH,
+        resLabel: resObj.label,
+        resDetail: resObj.detail
+      };
+    }
+
+    function setSensorResolution(resMode) {
+      AppState.sensorResolution = resMode;
+      updateSensorResolutionUI();
+      recalculateMission();
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      if (cur) {
+        cur.sensorResolution = resMode;
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      }
+      if (window.AndroidBridge && window.AndroidBridge.showToast) {
+        const eff = getEffectiveCameraSpecs();
+        window.AndroidBridge.showToast("Sensor configurado: " + eff.resLabel);
+      }
+    }
+
+    function updateSensorResolutionUI() {
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_AIR_3S;
+      const resControl = document.getElementById('res-segmented-control');
+      const resDetail = document.getElementById('disp-res-detail');
+      if (!resControl) return;
+
+      const hasBinning = cam.resolutions && cam.resolutions.BINNING;
+      const btnHigh = document.getElementById('btn-res-high');
+      const btnBinned = document.getElementById('btn-res-binned');
+
+      if (btnHigh && cam.resolutions && cam.resolutions.HIGH) {
+        btnHigh.textContent = cam.resolutions.HIGH.label;
+        btnHigh.classList.toggle('active', AppState.sensorResolution === 'HIGH' || !hasBinning);
+      }
+      if (btnBinned) {
+        if (hasBinning) {
+          btnBinned.style.display = 'block';
+          btnBinned.textContent = cam.resolutions.BINNING.label;
+          btnBinned.classList.toggle('active', AppState.sensorResolution === 'BINNING');
+        } else {
+          btnBinned.style.display = 'none';
+        }
+      }
+
+      const eff = getEffectiveCameraSpecs();
+      if (resDetail) {
+        resDetail.textContent = eff.resDetail || `${eff.imgW} × ${eff.imgH} px`;
+      }
+    }
 
     let map, polygonLayer, flightLinesLayer, markersLayer;
 
@@ -2412,8 +2540,9 @@ function directSyncLocalMission(mName, e) {
       });
 
       loadSavedMissionsFromStorage();
-    ensureInitialMissions();
-    if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
+      ensureInitialMissions();
+      updateSensorResolutionUI();
+      if (AppState.savedMissions && AppState.savedMissions.length > 0) { setTimeout(function() { loadMission(0); }, 300); }
       seedInitialPolygon(defaultCenter);
     }
 
@@ -2498,29 +2627,21 @@ function directSyncLocalMission(mName, e) {
       recalculateMission();
       renderMissionsList();
       closeModal('modal-choose-flight-type');
-      switchToView('map');
+      switchToView('config');
       updateMissionHeaderBar();
 
       if (window.AndroidBridge && window.AndroidBridge.showToast) {
-        window.AndroidBridge.showToast("✓ Misión '" + newName + "' lista. Dibuja los puntos en el mapa.");
+        window.AndroidBridge.showToast("✓ Misión '" + newName + "' creada. Configura los parámetros de vuelo.");
       }
     }
 
     function updateMissionHeaderBar() {
       const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
       const titleElem = document.getElementById('msc-mission-title');
-      const lockBtn = document.getElementById('msc-btn-lock');
       if (cur) {
         if (titleElem) titleElem.textContent = cur.name || 'Misión';
-        if (lockBtn) {
-          const isLocked = cur.locked !== false;
-          lockBtn.textContent = isLocked ? '🔒' : '🔓';
-          lockBtn.title = isLocked ? 'Misión bloqueada (toca para permitir modificar)' : 'Misión desbloqueada para modificación';
-          lockBtn.style.borderColor = isLocked ? '#f59e0b' : '#22c55e';
-        }
       } else {
         if (titleElem) titleElem.textContent = AppState.currentMissionName || 'Sin Misión';
-        if (lockBtn) lockBtn.textContent = '🔓';
       }
       updatePointBadge();
       updateLockStatusBadge();
@@ -2611,7 +2732,18 @@ function directSyncLocalMission(mName, e) {
 
     function onCameraSelectChange(camKey) {
       AppState.camera = camKey;
+      const cam = CameraSpecs[camKey];
+      if (cam && (!cam.resolutions || !cam.resolutions.BINNING)) {
+        AppState.sensorResolution = 'HIGH';
+      }
+      updateSensorResolutionUI();
       recalculateMission();
+      const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
+      if (cur) {
+        cur.camera = camKey;
+        cur.sensorResolution = AppState.sensorResolution;
+        localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+      }
     }
 
     function addBoundaryPoint(latlng) {
@@ -2825,13 +2957,15 @@ function directSyncLocalMission(mName, e) {
       flightLinesLayer.clearLayers();
       AppState.waylines = [];
 
+      const cam = getEffectiveCameraSpecs();
+      const H = AppState.altitude;
+      const gsd = ((H * cam.sensorW * 100) / (cam.focal * cam.imgW)).toFixed(2);
+      const gsdStr = `${gsd} cm`;
+
       if (AppState.points.length < 2) {
-        updateStatDisplay(0, 0, 0, 0);
+        updateStatDisplay(0, 0, 0, 0, gsdStr);
         return;
       }
-
-      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
-      const H = AppState.altitude;
       
       const footprintW = (H * cam.sensorW) / cam.focal;
       const footprintH = (H * cam.sensorH) / cam.focal;
@@ -2863,6 +2997,7 @@ function directSyncLocalMission(mName, e) {
         cur.altitude = AppState.altitude;
         cur.speed = AppState.speed;
         cur.camera = AppState.camera;
+        cur.sensorResolution = AppState.sensorResolution;
         cur.gridAngle = AppState.gridAngle || 0;
         cur.frontOverlap = AppState.frontOverlap;
         cur.sideOverlap = AppState.sideOverlap;
@@ -2947,8 +3082,6 @@ function directSyncLocalMission(mName, e) {
       const areaM2 = computePolygonArea(AppState.points);
       const areaHa = (areaM2 / 10000).toFixed(2);
       const areaStr = `${areaHa} ha`;
-      const gsd = ((AppState.altitude * cam.sensorW * 100) / (cam.focal * cam.imgW)).toFixed(2);
-      const gsdStr = `${gsd} cm`;
 
       updateStatDisplay(timeStr, distStr, areaStr, gridWaypoints.length, gsdStr);
     }
@@ -3135,18 +3268,15 @@ function directSyncLocalMission(mName, e) {
       const viewMap = document.getElementById('drawer-view-map');
       const viewCfg = document.getElementById('drawer-view-config');
       const expScreen = document.getElementById('export-screen');
-      const nextContainer = document.getElementById('map-next-container');
 
       if (viewName === 'map') {
         if (viewMap) viewMap.classList.add('active');
         if (viewCfg) viewCfg.classList.remove('active');
         if (expScreen) expScreen.classList.remove('active');
-        if (nextContainer) nextContainer.style.display = 'block';
       } else if (viewName === 'config') {
         if (viewMap) viewMap.classList.remove('active');
         if (viewCfg) viewCfg.classList.add('active');
         if (expScreen) expScreen.classList.remove('active');
-        if (nextContainer) nextContainer.style.display = 'none';
         recalculateMission();
       } else if (viewName === 'export') {
         if (expScreen) expScreen.classList.add('active');
@@ -3167,11 +3297,6 @@ function directSyncLocalMission(mName, e) {
     function openSendToDjiFlyModal() {
       openModal('modal-send-dji');
       refreshDjiSlots();
-    }
-
-    function openSaveMissionModal() {
-      document.getElementById('save-mission-name-input').value = "Mision_" + new Date().toISOString().slice(5, 10);
-      openModal('modal-save-mission');
     }
 
     function openSaveMissionModal() {
@@ -3196,6 +3321,7 @@ function directSyncLocalMission(mName, e) {
         altitude: AppState.altitude,
         speed: AppState.speed,
         camera: AppState.camera,
+        sensorResolution: AppState.sensorResolution || 'HIGH',
         gridAngle: AppState.gridAngle || 0,
         mode: AppState.mode || 'Area',
         locked: true // Re-bloquear automáticamente al guardar
@@ -3441,11 +3567,21 @@ function directSyncLocalMission(mName, e) {
             <button class="btn-mission-lock ${m.locked ? 'locked' : 'unlocked'}" onclick="event.stopPropagation(); toggleMissionLock(${idx})" title="${m.locked ? 'Misión bloqueada con candado (Toca para desbloquear y permitir modificar)' : 'Misión desbloqueada (Toca para bloquear)'}">
               ${m.locked ? '🔒' : '🔓'}
             </button>
-            <button class="mission-card-delete" onclick="event.stopPropagation(); deleteMission(${idx})" title="Eliminar misión">🗑️</button>
+            <button class="btn-mission-params" onclick="event.stopPropagation(); loadMissionAndOpenConfig(${idx})" title="Editar parámetros fotogramétricos">
+              ⚙️
+            </button>
+            <button class="btn-mission-delete" onclick="event.stopPropagation(); deleteMission(${idx})" title="Eliminar misión">
+              🗑️
+            </button>
           </div>
         `;
         container.appendChild(card);
       });
+    }
+
+    function loadMissionAndOpenConfig(idx) {
+      loadMission(idx);
+      switchToView('config');
     }
 
     function loadMission(idx) {
@@ -3457,6 +3593,7 @@ function directSyncLocalMission(mName, e) {
       AppState.altitude = m.altitude || 80;
       AppState.speed = m.speed || 8;
       AppState.camera = m.camera || 'DJI_AIR_3S';
+      AppState.sensorResolution = m.sensorResolution || 'HIGH';
       AppState.gridAngle = m.gridAngle || 0;
       AppState.mode = m.mode || 'Area';
 
@@ -3467,6 +3604,7 @@ function directSyncLocalMission(mName, e) {
       if (spdElem) spdElem.textContent = AppState.speed + ' m/s';
       const camElem = document.getElementById('cfg-camera');
       if (camElem) camElem.value = AppState.camera;
+      updateSensorResolutionUI();
       const angleSlider = document.getElementById('slider-grid-angle');
       if (angleSlider) angleSlider.value = AppState.gridAngle;
       const angleDisp = document.getElementById('disp-grid-angle');
@@ -3783,10 +3921,11 @@ function directSyncLocalMission(mName, e) {
           existing = DEFAULT_PRELOADED_MISSIONS;
           localStorage.setItem('saved_missions', JSON.stringify(existing));
         }
-        // Ensure all have locked property and Air 3S default
+        // Ensure all have locked property, Air 3S default, and 50MP HIGH resolution
         existing.forEach(m => {
           if (typeof m.locked === 'undefined') m.locked = true;
           m.camera = 'DJI_AIR_3S';
+          if (!m.sensorResolution) m.sensorResolution = 'HIGH';
         });
         localStorage.setItem('saved_missions', JSON.stringify(existing));
         AppState.savedMissions = existing;
