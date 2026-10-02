@@ -494,32 +494,74 @@ async function parseKmzWaypoints(b64){
   try {
     if(!b64) return {wpCount:0, coords:[]};
     var zip = await JSZip.loadAsync(b64, {base64: true});
-    var kml = '';
-    for(var n of Object.keys(zip.files)){
-      if(n.endsWith('.kml') || n.endsWith('.wpml')){
-        try {
-          var text = await zip.file(n).async('text');
-          kml += '\n' + text;
-        } catch(err){}
+    var coords = [];
+    var wpCount = 0;
+
+    // Prioridad 1: waylines.wpml (Estándar oficial DJI Fly de ejecución)
+    var waylinesFile = null;
+    for(var fn of Object.keys(zip.files)){
+      if(fn.toLowerCase().indexOf('waylines.wpml') !== -1){
+        waylinesFile = zip.files[fn];
+        break;
       }
     }
-    if(!kml) return {wpCount:0, coords:[]};
 
-    var coords = [], re = /<coordinates>([\s\S]*?)<\/coordinates>/gi, m;
-    while((m = re.exec(kml)) !== null){
-      m[1].trim().split(/\s+/).forEach(function(p){
-        var xyz = p.split(',');
-        if(xyz.length >= 2){
-          var lo = parseFloat(xyz[0]), la = parseFloat(xyz[1]);
-          if(!isNaN(lo) && !isNaN(la)) coords.push([lo, la]);
+    if(waylinesFile){
+      var wXml = await waylinesFile.async('text');
+      var reWp = /<Placemark[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Placemark>/gi, m;
+      while((m = reWp.exec(wXml)) !== null){
+        var parts = m[1].trim().split(/[,\\s]+/);
+        if(parts.length >= 2){
+          var lo = parseFloat(parts[0]), la = parseFloat(parts[1]);
+          if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)){
+            coords.push([lo, la]);
+          }
         }
-      });
+      }
+      wpCount = coords.length;
+      if(wpCount > 0) return {wpCount: wpCount, coords: coords};
     }
-    var placemarks = (kml.match(/<Placemark/gi)||[]).length;
-    var wpTags = (kml.match(/<wpml:waypoint/gi)||[]).length;
-    var exTags = (kml.match(/<wpml:executeHeight/gi)||[]).length;
-    var maxWp = Math.max(placemarks, wpTags, exTags, coords.length);
-    return {wpCount: maxWp, coords: coords};
+
+    // Prioridad 2: doc.kml o KML de Google Earth (extraer solo de LineString o Placemarks)
+    var kmlFile = null;
+    for(var fn of Object.keys(zip.files)){
+      if(fn.toLowerCase().endsWith('.kml') && fn.toLowerCase().indexOf('template') === -1){
+        kmlFile = zip.files[fn];
+        break;
+      }
+    }
+
+    if(kmlFile){
+      var kXml = await kmlFile.async('text');
+      // Intentar LineString
+      var lsMatch = /<LineString[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/LineString>/i.exec(kXml);
+      if(lsMatch && lsMatch[1]){
+        var tokens = lsMatch[1].trim().split(/\s+/);
+        tokens.forEach(function(tok){
+          var c = tok.split(',');
+          if(c.length >= 2){
+            var lo = parseFloat(c[0]), la = parseFloat(c[1]);
+            if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)) coords.push([lo, la]);
+          }
+        });
+        wpCount = coords.length;
+        if(wpCount > 0) return {wpCount: wpCount, coords: coords};
+      }
+
+      // Si no hubo LineString, buscar Points individuales
+      var ptRe = /<Point[\s\S]*?<coordinates>([\s\S]*?)<\/coordinates>[\s\S]*?<\/Point>/gi, pm;
+      while((pm = ptRe.exec(kXml)) !== null){
+        var c = pm[1].trim().split(/[,\\s]+/);
+        if(c.length >= 2){
+          var lo = parseFloat(c[0]), la = parseFloat(c[1]);
+          if(!isNaN(lo) && !isNaN(la) && (lo !== 0 || la !== 0)) coords.push([lo, la]);
+        }
+      }
+      wpCount = coords.length;
+      return {wpCount: wpCount, coords: coords};
+    }
+
+    return {wpCount: 0, coords: []};
   } catch(e) {
     return {wpCount: 0, coords: []};
   }
