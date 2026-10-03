@@ -57,7 +57,11 @@
       if (S.selDeviceGuid) {
         injectSelectedLocalToDevice();
       } else {
-        createSelectedLocalAsNewDeviceSlot();
+        if (window.AndroidBridge && window.AndroidBridge.showToast) {
+          window.AndroidBridge.showToast("⚠️ Selecciona una ranura en el RC 2 para sobreescribir");
+        } else {
+          alert("⚠️ Selecciona una ranura en el RC 2 para sobreescribir");
+        }
       }
     }
   </script>
@@ -1334,6 +1338,20 @@
 .btn-mission-lock:hover {
   transform: scale(1.08);
 }
+.btn-mission-share {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+.btn-mission-share:hover {
+  transform: scale(1.08);
+  background: #fde047;
+}
 .btn-mission-params {
   background: #e0f2fe;
   border: 1px solid #7dd3fc;
@@ -2322,13 +2340,25 @@
           </div>
         </div>
 
-        <!-- RTH Policy Banner -->
-        <div class="config-group" style="background: #f1f5f9; padding: 10px 12px; border-radius: 8px; border-left: 4px solid var(--primary); margin-top: 4px;">
-          <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">
-            Fin de Misión y Pérdida de Señal:
+        <!-- Pérdida de señal (configurable) -->
+        <div class="config-group">
+          <label class="config-label">📡 Al perder señal del control</label>
+          <div class="shutter-carousel" id="grp-rclost">
+            <div class="shutter-chip active" data-val="goHome" onclick="setRcLostAction('goHome')">🏠 RTH</div>
+            <div class="shutter-chip" data-val="hover" onclick="setRcLostAction('hover')">⏸ Flotar</div>
+            <div class="shutter-chip" data-val="landing" onclick="setRcLostAction('landing')">⬇ Aterrizar</div>
+            <div class="shutter-chip" data-val="goContinue" onclick="setRcLostAction('goContinue')">▶ Continuar</div>
           </div>
-          <div style="font-size: 0.78rem; color: #334155; display: flex; align-items: center; gap: 6px;">
-            <span>🏠</span> <strong>Regreso automático a Home (RTH)</strong>
+        </div>
+
+        <!-- Fin de misión (configurable) -->
+        <div class="config-group">
+          <label class="config-label">🏁 Al terminar la misión</label>
+          <div class="shutter-carousel" id="grp-finish">
+            <div class="shutter-chip active" data-val="goHome" onclick="setFinishAction('goHome')">🏠 RTH</div>
+            <div class="shutter-chip" data-val="noAction" onclick="setFinishAction('noAction')">⏸ Flotar</div>
+            <div class="shutter-chip" data-val="autoLand" onclick="setFinishAction('autoLand')">⬇ Aterrizar</div>
+            <div class="shutter-chip" data-val="gotoFirstWaypoint" onclick="setFinishAction('gotoFirstWaypoint')">↩ 1er punto</div>
           </div>
         </div>
       </div>
@@ -2727,6 +2757,8 @@
       autoGrid: false,
       gridAngle: 0,
       signalLossContinue: false, // Regreso a Home por defecto
+      rcLostAction: 'goHome', // goHome (RTH) | hover | landing | goContinue
+      finishAction: 'goHome', // goHome | noAction | autoLand | gotoFirstWaypoint
       camera: 'DJI_AIR_3S', // DEFAULT ALWAYS AIR 3S
       sensorResolution: 'HIGH', // HIGH (50MP/48MP/20MP) or BINNING (12MP)
       points: [], // LatLng vertices
@@ -2949,6 +2981,9 @@
       AppState.speed = 8.0;
       AppState.camera = 'DJI_AIR_3S';
       AppState.gridAngle = 0;
+      AppState.rcLostAction = 'goHome';
+      AppState.finishAction = 'goHome';
+      syncActionChips();
       if (normType === '3D') {
         AppState.gimbalPitch = -60.0;
       } else {
@@ -3740,8 +3775,50 @@
 
     function setShutter(speed, elem) {
       AppState.shutterSpeed = speed;
-      document.querySelectorAll('.shutter-chip').forEach(c => c.classList.remove('active'));
+      const grp = elem.parentElement || document;
+      grp.querySelectorAll('.shutter-chip').forEach(c => c.classList.remove('active'));
       elem.classList.add('active');
+    }
+
+    function syncActionChips() {
+      const mark = (gid, val) => {
+        const g = document.getElementById(gid);
+        if (!g) return;
+        g.querySelectorAll('.shutter-chip').forEach(c => c.classList.toggle('active', c.dataset.val === val));
+      };
+      mark('grp-rclost', AppState.rcLostAction);
+      mark('grp-finish', AppState.finishAction);
+    }
+
+    function setRcLostAction(val) {
+      AppState.rcLostAction = val;
+      syncActionChips();
+      if (val === 'goContinue' && window.AndroidBridge && window.AndroidBridge.showToast) {
+        window.AndroidBridge.showToast('⚠️ Con "Continuar" el dron sigue la misión aunque pierda señal');
+      }
+    }
+
+    function setFinishAction(val) {
+      AppState.finishAction = val;
+      syncActionChips();
+    }
+
+    // Valores WPML válidos para DJI Fly
+    function getRcLostWpml() {
+      const a = AppState.rcLostAction || 'goHome';
+      if (a === 'goBack' || a === 'goHome') {
+        return { exit: 'executeLostAction', action: 'goHome' };
+      }
+      if (a === 'goContinue' || a === 'continue') {
+        return { exit: 'goContinue', action: 'goContinue' };
+      }
+      if (a === 'landing') {
+        return { exit: 'executeLostAction', action: 'landing' };
+      }
+      if (a === 'hover') {
+        return { exit: 'executeLostAction', action: 'hover' };
+      }
+      return { exit: 'executeLostAction', action: 'goHome' };
     }
 
     function toggleAutoGrid(checked) {
@@ -3836,6 +3913,8 @@
         sensorResolution: AppState.sensorResolution || 'HIGH',
         gridAngle: AppState.gridAngle || 0,
         mode: AppState.mode || 'Area',
+        rcLostAction: (AppState.rcLostAction === 'goBack' ? 'goHome' : (AppState.rcLostAction || 'goHome')),
+        finishAction: AppState.finishAction || 'goHome',
         locked: true // Re-bloquear automáticamente al guardar
       };
 
@@ -4082,6 +4161,9 @@
             <p>${m.points.length} puntos · ${m.date}</p>
           </div>
           <div class="mission-card-actions">
+            <button class="btn-mission-share" onclick="event.stopPropagation(); shareLocalMissionItem('${m.name}', event)" title="Compartir misión KMZ">
+              📤
+            </button>
             <button class="btn-mission-lock ${m.locked ? 'locked' : 'unlocked'}" onclick="event.stopPropagation(); toggleMissionLock(${idx})" title="${m.locked ? 'Misión bloqueada con candado (Toca para desbloquear y permitir modificar)' : 'Misión desbloqueada (Toca para bloquear)'}">
               ${m.locked ? '🔒' : '🔓'}
             </button>
@@ -4114,6 +4196,9 @@
       AppState.sensorResolution = m.sensorResolution || 'HIGH';
       AppState.gridAngle = m.gridAngle || 0;
       AppState.mode = m.mode || 'Area';
+      AppState.rcLostAction = (m.rcLostAction === 'goBack' ? 'goHome' : (m.rcLostAction || 'goHome'));
+      AppState.finishAction = m.finishAction || 'goHome';
+      syncActionChips();
 
       // Sincronizar controles visuales DOM
       const altElem = document.getElementById('disp-altitude');
@@ -4313,9 +4398,9 @@
     <wpml:updateTime>${Date.now()}</wpml:updateTime>
     <wpml:missionConfig>
       <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
-      <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
+      <wpml:finishAction>${AppState.finishAction || 'goHome'}</wpml:finishAction>
+      <wpml:exitOnRCLost>${getRcLostWpml().exit}</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>${getRcLostWpml().action}</wpml:executeRCLostAction>
       <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
@@ -4380,9 +4465,9 @@
   <Document>
     <wpml:missionConfig>
       <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>
-      <wpml:finishAction>goHome</wpml:finishAction>
-      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>
-      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>
+      <wpml:finishAction>${AppState.finishAction || 'goHome'}</wpml:finishAction>
+      <wpml:exitOnRCLost>${getRcLostWpml().exit}</wpml:exitOnRCLost>
+      <wpml:executeRCLostAction>${getRcLostWpml().action}</wpml:executeRCLostAction>
       <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>
       <wpml:globalTransitionalSpeed>${AppState.speed}</wpml:globalTransitionalSpeed>
       <wpml:droneInfo>
@@ -4683,8 +4768,6 @@ function updateSyncBtn(){
   const isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
   const canTransfer = S.connected || isRcLocal;
   document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice && canTransfer);
-  var bnew = document.getElementById('btn-new');
-  if(bnew) bnew.disabled = !(hasLocal && canTransfer);
 }
 
 function switchTab(tab){
@@ -4736,7 +4819,7 @@ function renderDeviceSlots(){
     } else if(!S.connected) {
       c.innerHTML = '<div class="empty">🔌 Sin conexión USB-OTG.<br><small style="color:var(--muted)">Conecta el cable USB OTG al teléfono y desbloquea la pantalla del RC 2.</small></div>';
     } else {
-      c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Presiona el botón "➕ CREAR NUEVA MISIÓN EN RC 2" para transferir una.</small></div>';
+      c.innerHTML = '<div class="empty">📂 No se encontraron ranuras de misión en RC 2.<br><small style="color:var(--muted)">Conecta el RC 2 y desbloquéalo para ver las misiones existentes.</small></div>';
     }
     S.selDeviceGuid = null;
     document.getElementById('dst-slot').textContent = 'Sin ranura seleccionada';
@@ -5179,21 +5262,10 @@ function injectSelectedLocalToDevice(){
 }
 
 function createSelectedLocalAsNewDeviceSlot(){
-  if(!S.selLocalMission){ alert('Selecciona una misión local primero.'); return; }
-
-  var selWp = S.selLocalMission.wpCount ? (' (' + S.selLocalMission.wpCount + ' WP)') : '';
-  if(!confirm('¿Crear una NUEVA misión en DJI Fly (RC 2) basada en "' + S.selLocalMission.name + selWp + '"?')) return;
-
-  appendLog('[MTP] Creando nueva misión en RC 2 desde ' + S.selLocalMission.name + selWp + '...');
-  var newBtn = document.getElementById('btn-new');
-  if(newBtn){ newBtn.disabled = true; newBtn.textContent = '⏳ CREANDO EN RC 2...'; }
-  if(window.AndroidBridge && window.AndroidBridge.createNewSlotFromLocal){
-    var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
-    var ok = window.AndroidBridge.createNewSlotFromLocal(targetFileParam);
-    setTimeout(function(){
-      if(newBtn){ newBtn.disabled = false; newBtn.textContent = '➕ CREAR NUEVA MISIÓN EN RC 2'; }
-      refreshDeviceSlots();
-    }, 2500);
+  if(window.AndroidBridge && window.AndroidBridge.showToast){
+    window.AndroidBridge.showToast("⚠️ Selecciona una ranura existente del RC 2 para sobreescribir.");
+  } else {
+    alert("⚠️ Selecciona una ranura existente del RC 2 para sobreescribir.");
   }
 }
 

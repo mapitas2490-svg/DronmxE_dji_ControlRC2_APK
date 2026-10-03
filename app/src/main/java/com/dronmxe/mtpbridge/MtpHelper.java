@@ -102,9 +102,7 @@ public class MtpHelper {
             {"DJI", "dji.go.v5", "files", "Waypoint"},
             {"DJI", "dji.go.v5", "files", "waypoint"},
             {"DJI", "Waypoint"},
-            {"DJI", "waypoint"},
-            {"Download"},
-            {"download"}
+            {"DJI", "waypoint"}
     };
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
@@ -474,7 +472,9 @@ public class MtpHelper {
                             MtpObjectInfo info = device.getObjectInfo(h);
                             if (info == null) continue;
                             String name = info.getName();
-                            if (name == null || seen.contains(name.toLowerCase())) continue;
+                            if (name == null) continue;
+                            String baseName = name.toLowerCase().endsWith(".kmz") ? name.substring(0, name.length() - 4).toLowerCase() : name.toLowerCase();
+                            if (seen.contains(baseName)) continue;
 
                             DeviceSlotInfo slot = new DeviceSlotInfo();
                             slot.guid = name.endsWith(".kmz") ? name.substring(0, name.length() - 4) : name;
@@ -482,10 +482,14 @@ public class MtpHelper {
                             slot.dateModified = info.getDateModified() * 1000L;
                             slot.size = info.getCompressedSize();
 
-                            if (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0) {
+                            boolean isDirectKmz = name.toLowerCase().endsWith(".kmz");
+                            if (isDirectKmz) {
+                                slot.kmzHandle = h;
+                                slot.folderHandle = waypointHandle;
+                            } else {
                                 slot.folderHandle = h;
                                 int[] sub = device.getObjectHandles(storageId, 0, h);
-                                if (sub != null) {
+                                if (sub != null && sub.length > 0) {
                                     for (int sh : sub) {
                                         MtpObjectInfo subObj = device.getObjectInfo(sh);
                                         if (subObj != null && subObj.getName() != null && subObj.getName().toLowerCase().endsWith(".kmz")) {
@@ -495,33 +499,54 @@ public class MtpHelper {
                                         }
                                     }
                                 }
-                            } else if (name.toLowerCase().endsWith(".kmz")) {
-                                slot.kmzHandle = h; slot.folderHandle = waypointHandle;
                             }
 
                             if (slot.kmzHandle != -1) {
-                                // Límite de 3MB para lectura de metadatos/miniaturas
-                                if (slot.size > 0 && slot.size < 3000000) {
-                                    byte[] data = device.getObject(slot.kmzHandle, (int) slot.size);
-                                    if (data != null) {
-                                        KmzParsedInfo pi = parseKmzFast(data);
-                                        slot.wpCount = pi.wpCount;
-                                        slot.displayName = pi.missionName;
-                                        slot.coords = pi.coords;
-                                        if (slot.coords.isEmpty()) {
-                                            slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
-                                        }
+                                int readSize = (int) slot.size;
+                                if (readSize <= 0 || readSize > 5000000) {
+                                    readSize = 1000000;
+                                }
+                                byte[] data = device.getObject(slot.kmzHandle, readSize);
+                                if (data != null && data.length > 0) {
+                                    KmzParsedInfo pi = parseKmzFast(data);
+                                    if ((pi.missionName == null || pi.missionName.trim().isEmpty() || pi.missionName.equalsIgnoreCase("Document")) && pi.wpCount <= 2) {
+                                        callback.onLog("[SCAN] Ranura fantasma/incompleta ignorada: " + slot.guid);
+                                        continue;
+                                    }
+                                    slot.wpCount = pi.wpCount;
+                                    slot.displayName = pi.missionName;
+                                    slot.coords = pi.coords;
+                                    if (slot.coords.isEmpty()) {
+                                        slot.base64 = android.util.Base64.encodeToString(data, android.util.Base64.NO_WRAP);
                                     }
                                 }
                                 if (slot.displayName == null || slot.displayName.isEmpty()) slot.displayName = slot.guid;
                                 slots.add(slot);
-                                seen.add(name.toLowerCase());
+                                seen.add(baseName);
+                                callback.onLog("[SCAN] Ranura reconocida: " + slot.displayName + " (" + slot.guid + ") [" + slot.wpCount + " WP]");
+                            } else {
+                                callback.onLog("[SCAN] Objeto ignorado sin KMZ: " + name + " (handle=" + h + ")");
                             }
                         }
                     }
                 }
             }
             Collections.sort(slots, (a, b) -> Long.compare(b.dateModified, a.dateModified));
+
+            // Deduplicación para reflejar exactamente lo que DJI Fly muestra en el RC 2:
+            // Deduplicar únicamente por GUID para evitar que una misma ranura se duplique por folder/file
+            List<DeviceSlotInfo> deduplicatedSlots = new ArrayList<>();
+            Set<String> seenGuids = new HashSet<>();
+            for (DeviceSlotInfo s : slots) {
+                String cleanGuid = s.guid != null ? s.guid.trim().toLowerCase() : "";
+                if (cleanGuid.endsWith(".kmz")) cleanGuid = cleanGuid.substring(0, cleanGuid.length() - 4);
+                if (seenGuids.contains(cleanGuid)) continue;
+
+                deduplicatedSlots.add(s);
+                seenGuids.add(cleanGuid);
+            }
+            slots = deduplicatedSlots;
+
             synchronized (cachedSlots) {
                 cachedSlots.clear();
                 cachedSlots.addAll(slots);
@@ -715,24 +740,38 @@ public class MtpHelper {
             String baseGuid = slotGuid.endsWith(".kmz") ? slotGuid.substring(0, slotGuid.length() - 4) : slotGuid;
             String kmzFileName = baseGuid + ".kmz";
 
-            // 1. Buscar en waypointHandle si la ranura existe como carpeta o como archivo directo
-            int[] items = device.getObjectHandles(storageId, 0, waypointHandle);
-            if (items != null) {
-                for (int h : items) {
-                    MtpObjectInfo info = device.getObjectInfo(h);
-                    if (info == null || info.getName() == null) continue;
-                    String iname = info.getName().trim();
-
-                    // Carpeta del slot (directorio)
-                    if ((iname.equalsIgnoreCase(baseGuid) || iname.equalsIgnoreCase(kmzFileName))
-                            && (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0)) {
-                        folderHandle = h;
+            // 0. Si ya tenemos la ranura en caché, usar sus handles directamente
+            synchronized (cachedSlots) {
+                for (DeviceSlotInfo cs : cachedSlots) {
+                    String cGuid = cs.guid.endsWith(".kmz") ? cs.guid.substring(0, cs.guid.length() - 4) : cs.guid;
+                    if (cGuid.equalsIgnoreCase(baseGuid) && cs.storageId == storageId) {
+                        if (cs.folderHandle != -1 && cs.folderHandle != waypointHandle) {
+                            folderHandle = cs.folderHandle;
+                        } else if (cs.kmzHandle != -1) {
+                            directFileHandle = cs.kmzHandle;
+                        }
+                        break;
                     }
+                }
+            }
 
-                    // Archivo directo con el nombre del slot en la raíz de waypoint
-                    if ((iname.equalsIgnoreCase(kmzFileName) || iname.equalsIgnoreCase(baseGuid))
-                            && info.getFormat() != MtpConstants.FORMAT_ASSOCIATION && info.getFormat() != 0) {
-                        directFileHandle = h;
+            // 1. Buscar en waypointHandle si la ranura existe como carpeta o como archivo directo
+            if (folderHandle == -1 && directFileHandle == -1) {
+                int[] items = device.getObjectHandles(storageId, 0, waypointHandle);
+                if (items != null) {
+                    for (int h : items) {
+                        MtpObjectInfo info = device.getObjectInfo(h);
+                        if (info == null || info.getName() == null) continue;
+                        String iname = info.getName().trim();
+
+                        boolean isDirect = iname.toLowerCase().endsWith(".kmz");
+                        if (iname.equalsIgnoreCase(kmzFileName) || iname.equalsIgnoreCase(baseGuid)) {
+                            if (isDirect) {
+                                directFileHandle = h;
+                            } else {
+                                folderHandle = h;
+                            }
+                        }
                     }
                 }
             }
@@ -792,19 +831,12 @@ public class MtpHelper {
             int[] sub = device.getObjectHandles(storageId, 0, folderHandle);
             if (sub != null && sub.length > 0) {
                 for (int sh : sub) {
-                    MtpObjectInfo subObj = device.getObjectInfo(sh);
-                    if (subObj != null && subObj.getName() != null) {
-                        String sName = subObj.getName().trim().toLowerCase();
-                        if (sName.endsWith(".kmz") || sName.endsWith(".jpg") || sName.endsWith(".png") || sName.endsWith(".tmp") || sName.endsWith(".bak")) {
-                            if (sName.endsWith(".kmz")) existingKmzName = subObj.getName().trim();
-                            boolean del = device.deleteObject(sh);
-                            callback.onLog("[MTP] Limpiando previo " + subObj.getName() + ": " + (del ? "OK" : "omitido"));
-                        }
-                    }
+                    deleteMtpObjectRecursive(device, storageId, sh);
                 }
             }
+            try { Thread.sleep(80); } catch (Exception ignored) {}
 
-            String targetFileName = (existingKmzName != null && !existingKmzName.isEmpty()) ? existingKmzName : kmzFileName;
+            String targetFileName = kmzFileName;
 
             // 6. Inyectar el nuevo KMZ nativo DJI Fly
             MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
@@ -820,7 +852,7 @@ public class MtpHelper {
             if (sent == null) {
                 callback.onLog("[WARN] sendObjectInfo retornó NULL. Recreando ranura limpia en RC 2...");
                 try {
-                    device.deleteObject(folderHandle);
+                    deleteMtpObjectRecursive(device, storageId, folderHandle);
                     Thread.sleep(150);
                 } catch (Exception ignored) {}
 
@@ -883,24 +915,38 @@ public class MtpHelper {
             int targetWaypointHandle = -1;
             String baseGuid = slotGuid.endsWith(".kmz") ? slotGuid.substring(0, slotGuid.length() - 4) : slotGuid;
 
-            for (int sId : prioritizedIds) {
-                int wHandle = findWaypointHandle(device, sId);
-                if (wHandle != -1) {
-                    int[] items = device.getObjectHandles(sId, 0, wHandle);
-                    if (items != null) {
-                        for (int h : items) {
-                            MtpObjectInfo info = device.getObjectInfo(h);
-                            if (info != null && info.getName() != null) {
-                                String iname = info.getName().trim();
-                                if (iname.equalsIgnoreCase(baseGuid) || iname.equalsIgnoreCase(baseGuid + ".kmz")) {
-                                    targetStorageId = sId;
-                                    targetWaypointHandle = wHandle;
-                                    break;
+            // Revisar primero en la caché de escaneo reciente
+            synchronized (cachedSlots) {
+                for (DeviceSlotInfo cs : cachedSlots) {
+                    String cGuid = cs.guid.endsWith(".kmz") ? cs.guid.substring(0, cs.guid.length() - 4) : cs.guid;
+                    if (cGuid.equalsIgnoreCase(baseGuid)) {
+                        targetStorageId = cs.storageId;
+                        targetWaypointHandle = findWaypointHandle(device, cs.storageId);
+                        break;
+                    }
+                }
+            }
+
+            if (targetStorageId == -1 || targetWaypointHandle == -1) {
+                for (int sId : prioritizedIds) {
+                    int wHandle = findWaypointHandle(device, sId);
+                    if (wHandle != -1) {
+                        int[] items = device.getObjectHandles(sId, 0, wHandle);
+                        if (items != null) {
+                            for (int h : items) {
+                                MtpObjectInfo info = device.getObjectInfo(h);
+                                if (info != null && info.getName() != null) {
+                                    String iname = info.getName().trim();
+                                    if (iname.equalsIgnoreCase(baseGuid) || iname.equalsIgnoreCase(baseGuid + ".kmz")) {
+                                        targetStorageId = sId;
+                                        targetWaypointHandle = wHandle;
+                                        break;
+                                    }
                                 }
                             }
                         }
+                        if (targetStorageId != -1) break;
                     }
-                    if (targetStorageId != -1) break;
                 }
             }
 
@@ -1034,27 +1080,101 @@ public class MtpHelper {
 
     public boolean deleteDeviceSlot(String slotGuid) {
         MtpDevice device; synchronized (mtpLock) { device = mtpDevice; }
-        if (device == null) return false;
+        if (device == null || slotGuid == null) return false;
         try {
             int[] storageIds = device.getStorageIds();
+            if (storageIds == null) return false;
+            String baseGuid = slotGuid.endsWith(".kmz") ? slotGuid.substring(0, slotGuid.length() - 4).trim() : slotGuid.trim();
+            boolean deleted = false;
+
             for (int sid : storageIds) {
-                for (String[] path : WAYPOINT_PATH_CANDIDATES) {
-                    int parent = findHandleForPath(device, sid, path);
-                    if (parent == -1) continue;
-                    int[] items = device.getObjectHandles(sid, 0, parent);
-                    if (items == null) continue;
-                    for (int h : items) {
-                        MtpObjectInfo info = device.getObjectInfo(h);
-                        if (info != null && (slotGuid.equalsIgnoreCase(info.getName()) || info.getName().equalsIgnoreCase(slotGuid + ".kmz"))) {
-                            int[] sub = device.getObjectHandles(sid, 0, h);
-                            if (sub != null) { for (int sh : sub) device.deleteObject(sh); }
-                            device.deleteObject(h); return true;
-                        }
+                int waypointHandle = -1;
+                if (customWaypointPath != null && !customWaypointPath.trim().isEmpty()) {
+                    String cleanPath = customWaypointPath.trim().replaceAll("^/+|/+$", "");
+                    String[] parts = cleanPath.split("[/\\\\]+");
+                    waypointHandle = findHandleForPath(device, sid, parts);
+                }
+                if (waypointHandle == -1) {
+                    for (String[] path : WAYPOINT_PATH_CANDIDATES) {
+                        waypointHandle = findHandleForPath(device, sid, path);
+                        if (waypointHandle != -1) break;
+                    }
+                }
+                if (waypointHandle == -1) continue;
+
+                int[] items = device.getObjectHandles(sid, 0, waypointHandle);
+                if (items == null) continue;
+                for (int h : items) {
+                    MtpObjectInfo info = device.getObjectInfo(h);
+                    if (info == null || info.getName() == null) continue;
+                    String iname = info.getName().trim();
+                    String iBase = iname.endsWith(".kmz") ? iname.substring(0, iname.length() - 4).trim() : iname;
+
+                    if (baseGuid.equalsIgnoreCase(iBase)) {
+                        deleteMtpObjectRecursive(device, sid, h);
+                        deleted = true;
                     }
                 }
             }
-        } catch (Exception ignored) {}
+            return deleted;
+        } catch (Exception e) {
+            callback.onLog("[ERR] deleteDeviceSlot: " + e.getMessage());
+        }
         return false;
+    }
+
+    public void deleteMtpObjectRecursive(MtpDevice device, int storageId, int handle) {
+        if (device == null || handle <= 0) return;
+        try {
+            int[] children = device.getObjectHandles(storageId, 0, handle);
+            if (children != null && children.length > 0) {
+                for (int ch : children) {
+                    deleteMtpObjectRecursive(device, storageId, ch);
+                }
+            }
+            device.deleteObject(handle);
+        } catch (Exception ignored) {}
+    }
+
+    public String dumpWaypointTreeRaw() {
+        StringBuilder sb = new StringBuilder();
+        MtpDevice device; synchronized (mtpLock) { device = mtpDevice; }
+        if (device == null) return "NO_DEVICE";
+        try {
+            int[] sids = device.getStorageIds();
+            if (sids == null) return "NO_STORAGE";
+            for (int sid : sids) {
+                int wh = findWaypointHandle(device, sid);
+                sb.append("STORAGE ").append(sid).append(" waypointHandle=").append(wh).append("\n");
+                if (wh != -1) dumpTree(device, sid, wh, "  ", sb, 0);
+                // Carpetas hermanas de Waypoint (p.ej. map_preview) para diagnóstico
+                int parent = findHandleForPath(device, sid, new String[]{"Android", "data", "dji.go.v5", "files"});
+                if (parent != -1) {
+                    int[] kids = device.getObjectHandles(sid, 0, parent);
+                    if (kids != null) {
+                        sb.append("  [files/]: ");
+                        for (int k : kids) { MtpObjectInfo i = device.getObjectInfo(k); if (i != null) sb.append(i.getName()).append(", "); }
+                        sb.append("\n");
+                    }
+                }
+            }
+        } catch (Exception e) { sb.append("ERR ").append(e.getMessage()); }
+        return sb.toString();
+    }
+
+    private void dumpTree(MtpDevice device, int sid, int handle, String indent, StringBuilder sb, int depth) {
+        if (depth > 3) return;
+        int[] kids = device.getObjectHandles(sid, 0, handle);
+        if (kids == null) return;
+        for (int k : kids) {
+            MtpObjectInfo i = device.getObjectInfo(k);
+            if (i == null) continue;
+            boolean dir = i.getFormat() == MtpConstants.FORMAT_ASSOCIATION;
+            sb.append(indent).append(dir ? "[D] " : "    ").append(i.getName())
+              .append("  size=").append(i.getCompressedSize())
+              .append("  mod=").append(new java.util.Date(i.getDateModified() * 1000L)).append("\n");
+            if (dir) dumpTree(device, sid, k, indent + "  ", sb, depth + 1);
+        }
     }
 
     public boolean createNewMissionSlot(File localFile) {

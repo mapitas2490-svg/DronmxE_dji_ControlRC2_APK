@@ -259,7 +259,7 @@ public class WpmlKmzBuilder {
                 } else if (wStr.contains("<Folder>")) {
                     wStr = wStr.replace("<Folder>", "<Folder>\n      <wpml:missionName><![CDATA[" + escapeXml(safeName) + "]]></wpml:missionName>");
                 }
-                finalWaylinesBytes = wStr.getBytes(StandardCharsets.UTF_8);
+                finalWaylinesBytes = normalizeMissionConfig(wStr).getBytes(StandardCharsets.UTF_8);
 
                 if (origTemplateBytes != null && origTemplateBytes.length > 0) {
                     String tStr = new String(origTemplateBytes, StandardCharsets.UTF_8);
@@ -278,7 +278,7 @@ public class WpmlKmzBuilder {
                                              "  </Document>";
                         tStr = tStr.replace("</Document>", folderBlock);
                     }
-                    finalTemplateBytes = tStr.getBytes(StandardCharsets.UTF_8);
+                    finalTemplateBytes = normalizeMissionConfig(tStr).getBytes(StandardCharsets.UTF_8);
                 } else {
                     List<Waypoint> waypoints = extractWaypoints(inputFile);
                     finalTemplateBytes = generateTemplateKml(safeName, waypoints).getBytes(StandardCharsets.UTF_8);
@@ -323,6 +323,24 @@ public class WpmlKmzBuilder {
             logE(TAG, "Error generando Pure DJI KMZ: " + e.getMessage(), e);
             return inputFile;
         }
+    }
+
+    /**
+     * Corrige valores WPML inválidos (goHome en exitOnRCLost/executeRCLostAction) que hacen que
+     * DJI Fly muestre "Continuar" al perder señal, y actualiza updateTime para que DJI Fly
+     * detecte que la misión fue modificada.
+     */
+    public static String normalizeMissionConfig(String xml) {
+        if (xml == null) return null;
+        String s = xml;
+        s = s.replaceAll("<wpml:exitOnRCLost>\\s*goHome\\s*</wpml:exitOnRCLost>", "<wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>");
+        s = s.replaceAll("<wpml:executeRCLostAction>\\s*goBack\\s*</wpml:executeRCLostAction>", "<wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>");
+        if (s.contains("<wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>") && !s.contains("<wpml:executeRCLostAction>")) {
+            s = s.replace("<wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>",
+                    "<wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>\n      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>");
+        }
+        s = s.replaceAll("<wpml:updateTime>\\s*\\d+\\s*</wpml:updateTime>", "<wpml:updateTime>" + System.currentTimeMillis() + "</wpml:updateTime>");
+        return s;
     }
 
     private static byte[] readAllBytes(InputStream is) throws Exception {
@@ -516,7 +534,7 @@ public class WpmlKmzBuilder {
                "    <wpml:missionConfig>\n" +
                "      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>\n" +
                "      <wpml:finishAction>goHome</wpml:finishAction>\n" +
-               "      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>\n" +
+               "      <wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>\n" +
                "      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>\n" +
                "      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>\n" +
                "      <wpml:globalTransitionalSpeed>8.0</wpml:globalTransitionalSpeed>\n" +
@@ -552,7 +570,7 @@ public class WpmlKmzBuilder {
         sb.append("    <wpml:missionConfig>\n");
         sb.append("      <wpml:flyToWaylineMode>safely</wpml:flyToWaylineMode>\n");
         sb.append("      <wpml:finishAction>goHome</wpml:finishAction>\n");
-        sb.append("      <wpml:exitOnRCLost>goHome</wpml:exitOnRCLost>\n");
+        sb.append("      <wpml:exitOnRCLost>executeLostAction</wpml:exitOnRCLost>\n");
         sb.append("      <wpml:executeRCLostAction>goHome</wpml:executeRCLostAction>\n");
         sb.append("      <wpml:takeOffSecurityHeight>20</wpml:takeOffSecurityHeight>\n");
         sb.append("      <wpml:globalTransitionalSpeed>8.0</wpml:globalTransitionalSpeed>\n");

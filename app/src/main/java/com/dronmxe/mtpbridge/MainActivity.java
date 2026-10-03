@@ -312,6 +312,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
     @Override
     public void onLog(String message) {
+        Log.i("MtpHelper", message);
         runOnUiThread(() -> {
             String safe = JSONObject.quote(message);
             notifyJs("onLogMessage(" + safe + ");");
@@ -489,6 +490,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             } catch (Exception e) {
                 return "[]";
             }
+        }
+
+        @JavascriptInterface
+        public String dumpWaypointTreeRaw() {
+            return mtpHelper != null ? mtpHelper.dumpWaypointTreeRaw() : "NO_HELPER";
         }
 
         @JavascriptInterface
@@ -1048,6 +1054,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 }
             }).start();
         }
+
 
         @JavascriptInterface
         public void openInGoogleEarth(String fileNameOrGuid) {
