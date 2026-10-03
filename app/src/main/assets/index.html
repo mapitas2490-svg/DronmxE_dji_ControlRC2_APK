@@ -2548,7 +2548,7 @@
   <!-- PANEL DEVICE (RC 2) -->
   <div class="panel vis" id="panel-dev">
     <div class="phdr">
-      <div class="ptitle">🎮 Misiones RC 2 (DJI Fly)</div>
+      <div class="ptitle" id="title-panel-dev">🎮 Misiones RC 2 (DJI Fly)</div>
       <div class="hacts">
         <button class="ibtn" title="Refrescar RC 2" onclick="refreshDeviceSlots()">↻</button>
         <button class="ibtn" title="Cambiar Ruta de Búsqueda RC 2" onclick="openPathModal()">⚙️ Ruta</button>
@@ -4537,6 +4537,11 @@ function forceReconnectUsb(){
 function toggleLog(){ document.getElementById('log-box').classList.toggle('open'); }
 
 function onDeviceStatusChanged(connected, description){
+  var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  if (isRcLocal) {
+    connected = true;
+    description = 'Control RC 2: Almacenamiento interno/Download';
+  }
   S.connected = connected;
   const dot = document.getElementById('sdot'), txt = document.getElementById('stxt');
   const isBlocked = description && description.toLowerCase().indexOf('bloqueado') !== -1;
@@ -4573,9 +4578,28 @@ function switchTab(tab){
 function renderDeviceSlots(){
   const c = document.getElementById('list-dev'), slots = S.deviceSlots;
   const td = document.getElementById('tab-dev');
-  if(td) td.textContent = '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
+  const pt = document.getElementById('title-panel-dev');
+  var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+
+  if(td) {
+    td.textContent = isRcLocal
+      ? '🎮 RC 2 (/Download) (' + (slots ? slots.length : 0) + ')'
+      : '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
+  }
+  if(pt) {
+    pt.textContent = isRcLocal
+      ? '🎮 Misiones en /Download (RC 2)'
+      : '🎮 Misiones RC 2 (DJI Fly)';
+  }
 
   if(!slots || slots.length === 0){
+    if(isRcLocal) {
+      c.innerHTML = '<div class="empty">📂 No se encontraron misiones .kmz en Almacenamiento interno/Download.<br><small style="color:var(--muted)">Guarda o crea una misión en el Planificador para verla aquí.</small></div>';
+      S.selDeviceGuid = null;
+      document.getElementById('dst-slot').textContent = 'Sin misión seleccionada';
+      updateSyncBtn();
+      return;
+    }
     const desc = document.getElementById('stxt') ? document.getElementById('stxt').textContent : '';
     if(desc.toLowerCase().indexOf('bloqueado') !== -1) {
       c.innerHTML = '<div class="empty" style="border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); padding:10px 14px; border-radius:10px; text-align:center;">'
@@ -4608,7 +4632,7 @@ function renderDeviceSlots(){
   slots.forEach(function(slot, i){
     const isAct = slot.guid === S.selDeviceGuid;
     const isGuid = (!slot.displayName || slot.displayName === slot.guid);
-    const nameStr = isGuid ? ('Misión RC 2 (#' + shortGuid(slot.guid) + ')') : slot.displayName;
+    const nameStr = isGuid ? (isRcLocal ? slot.guid : ('Misión RC 2 (#' + shortGuid(slot.guid) + ')')) : slot.displayName;
     
     if (isAct) {
       document.getElementById('dst-slot').textContent = nameStr;
@@ -4620,19 +4644,21 @@ function renderDeviceSlots(){
 
     const cid = 'cv-d-' + i;
     const wp = slot.wpCount ? (slot.wpCount + ' WP') : '-- WP';
+    const pillText = isRcLocal ? 'RC 2 · /Download' : 'DJI Fly RC 2';
+    const subIdLabel = isRcLocal ? 'Archivo: ' : 'GUID: ';
 
     row.innerHTML = 
       '<div class="mrow-top">'
         +'<div class="twrap"><canvas id="'+cid+'" class="tcanv"></canvas><span class="tbadge">'+wp+'</span></div>'
         +'<div class="mmeta">'
-          +'<div class="mpills"><span class="pill pp">DJI Fly RC 2</span></div>'
+          +'<div class="mpills"><span class="pill pp">'+pillText+'</span></div>'
           +'<div class="msub">'+relTime(slot.dateModified)+' · '+wp+'</div>'
-          +'<div class="msub guid-txt">GUID: '+esc(shortGuid(slot.guid))+'</div>'
+          +'<div class="msub guid-txt">'+subIdLabel+esc(shortGuid(slot.guid))+'</div>'
         +'</div>'
         +'<div class="mact">'
-          +'<button class="btn-sync-direct" title="⚡ Sobreescribir esta ranura del RC 2 con la misión seleccionada" onclick="directOverwriteSlot(\''+esc(slot.guid)+'\', event)">⚡</button>'
+          +'<button class="btn-sync-direct" title="⚡ Sobreescribir con la misión seleccionada" onclick="directOverwriteSlot(\''+esc(slot.guid)+'\', event)">⚡</button>'
           +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openDeviceSlotInGoogleEarth(\''+esc(slot.guid)+'\', event)">🌍</button>'
-          +'<button class="btn-del" title="Eliminar del RC 2" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
+          +'<button class="btn-del" title="Eliminar" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
         +'</div>'
       +'</div>'
       +'<div class="mrow-name" title="'+esc(nameStr)+'">'+esc(nameStr)+'</div>';
@@ -4915,7 +4941,10 @@ async function parseKmzWaypoints(b64){
 }
 
 function refreshAll(){
-  if(!S.connected && window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+  var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  if (isRcLocal) {
+    onDeviceStatusChanged(true, 'Control RC 2: Almacenamiento interno/Download');
+  } else if(!S.connected && window.AndroidBridge && window.AndroidBridge.refreshUsb) {
     window.AndroidBridge.refreshUsb();
   }
   refreshDeviceSlots();
@@ -4923,6 +4952,13 @@ function refreshAll(){
 }
 
 function forceReconnectUsb(){
+  var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  if (isRcLocal) {
+    onDeviceStatusChanged(true, 'Control RC 2: Almacenamiento interno/Download');
+    refreshDeviceSlots();
+    refreshLocalMissions();
+    return;
+  }
   if(window.AndroidBridge && window.AndroidBridge.refreshUsb) {
     window.AndroidBridge.refreshUsb();
   }
@@ -4931,7 +4967,9 @@ function forceReconnectUsb(){
 }
 
 function refreshDeviceSlots(){
-  document.getElementById('list-dev').innerHTML = '<div class="empty"><span class="spin">⏳</span> Escaneando RC 2...</div>';
+  var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  var scanMsg = isRcLocal ? 'Escaneando /Download en RC 2...' : 'Escaneando RC 2...';
+  document.getElementById('list-dev').innerHTML = '<div class="empty"><span class="spin">⏳</span> ' + scanMsg + '</div>';
   if(window.AndroidBridge){
     if(window.AndroidBridge.fetchDeviceSlotsAsync){
       window.AndroidBridge.fetchDeviceSlotsAsync();
