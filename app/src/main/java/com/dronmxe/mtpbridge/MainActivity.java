@@ -1294,11 +1294,26 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         public String saveKmzMission(String base64Data, String missionName, String targetSlotGuid) {
             JSONObject result = new JSONObject();
             try {
+                if (base64Data == null || base64Data.trim().isEmpty()) {
+                    result.put("success", false);
+                    result.put("error", "Empty base64 data");
+                    return result.toString();
+                }
+                String cleanB64 = base64Data.trim();
+                if (cleanB64.contains(",")) {
+                    cleanB64 = cleanB64.substring(cleanB64.indexOf(",") + 1);
+                }
+                cleanB64 = cleanB64.replaceAll("\\s+", "");
+
                 byte[] decodedBytes;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    decodedBytes = java.util.Base64.getDecoder().decode(base64Data);
-                } else {
-                    decodedBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
+                try {
+                    decodedBytes = android.util.Base64.decode(cleanB64, android.util.Base64.DEFAULT);
+                } catch (Exception ex) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        decodedBytes = java.util.Base64.getDecoder().decode(cleanB64);
+                    } else {
+                        throw ex;
+                    }
                 }
 
                 File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
