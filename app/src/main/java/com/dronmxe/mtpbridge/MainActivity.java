@@ -808,8 +808,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         onLog("[RC2] Copiando localmente a DJI Fly: " + targetFile.getName() + " -> " + slotGuid);
                         String[] directDjiDirs = new String[]{
                             "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint",
-                            "/sdcard/Android/data/dji.go.v5/files/waypoint",
                             "/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint",
+                            "/sdcard/Android/data/dji.go.v5/files/waypoint",
                             "/sdcard/Android/data/dji.go.v5/files/Waypoint"
                         };
                         for (String djiRootPath : directDjiDirs) {
@@ -818,6 +818,17 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                                 if (djiRoot.exists() && djiRoot.isDirectory()) {
                                     File slotFolder = new File(djiRoot, slotGuid);
                                     if (!slotFolder.exists()) slotFolder.mkdirs();
+
+                                    // Limpiar archivos anteriores en la ranura
+                                    File[] oldFiles = slotFolder.listFiles();
+                                    if (oldFiles != null) {
+                                        for (File of : oldFiles) {
+                                            if (of.getName().toLowerCase().endsWith(".kmz") || of.getName().toLowerCase().endsWith(".jpg") || of.getName().toLowerCase().endsWith(".png")) {
+                                                try { of.delete(); } catch (Exception ignored) {}
+                                            }
+                                        }
+                                    }
+
                                     File slotKmz = new File(slotFolder, slotGuid + ".kmz");
                                     try (FileInputStream in = new FileInputStream(targetFile);
                                          FileOutputStream out = new FileOutputStream(slotKmz)) {
@@ -835,24 +846,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                                     if (ok) {
                                         slotKmz.setLastModified(System.currentTimeMillis());
                                         slotFolder.setLastModified(System.currentTimeMillis());
+                                        break; // Detener: Escrito en la primera carpeta válida, no duplicar
                                     }
                                 }
                             } catch (Exception ignored) {}
                         }
-                        // Asegurar también copia en /Download/
-                        try {
-                            File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                            File dlFile = new File(dl, slotGuid + ".kmz");
-                            if (!dlFile.getAbsolutePath().equalsIgnoreCase(targetFile.getAbsolutePath())) {
-                                try (FileInputStream in = new FileInputStream(targetFile);
-                                     FileOutputStream out = new FileOutputStream(dlFile)) {
-                                    byte[] buf = new byte[8192];
-                                    int len;
-                                    while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
-                                }
-                            }
-                            ok = true;
-                        } catch (Exception ignored) {}
                     } else {
                         onLog("[MTP] Iniciando inyección de " + targetFile.getName() + " hacia ranura " + slotGuid);
                         ok = mtpHelper.overwriteMissionKmz(slotGuid, targetFile);
@@ -1103,6 +1101,38 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                     }
                 } catch (Exception e) {
                     showToast("Error abriendo en Google Earth: " + e.getMessage());
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void shareLocalKmzFile(String fileNameOrPath) {
+            new Thread(() -> {
+                File fileToShare = resolveTargetKmzFile(fileNameOrPath);
+                if (fileToShare == null || !fileToShare.exists()) {
+                    showToast("No se encontró el archivo para compartir: " + fileNameOrPath);
+                    return;
+                }
+                try {
+                    File universalFile = WpmlKmzBuilder.ensureDjiWpmlKmz(fileToShare, getCacheDir());
+                    Uri contentUri = androidx.core.content.FileProvider.getUriForFile(
+                            MainActivity.this,
+                            getPackageName() + ".fileprovider",
+                            universalFile
+                    );
+
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("application/vnd.google-earth.kmz");
+                    intent.putExtra(Intent.EXTRA_STREAM, contentUri);
+                    intent.putExtra(Intent.EXTRA_SUBJECT, fileToShare.getName());
+                    intent.putExtra(Intent.EXTRA_TEXT, "Misión de vuelo dronmxE: " + fileToShare.getName());
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+                    Intent chooser = Intent.createChooser(intent, "Compartir misión KMZ (" + fileToShare.getName() + ")");
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(chooser);
+                } catch (Exception ex) {
+                    showToast("Error al compartir misión: " + ex.getMessage());
                 }
             }).start();
         }

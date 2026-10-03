@@ -33,6 +33,8 @@ import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,6 +60,7 @@ public class MtpHelper {
     private MtpDevice mtpDevice;
 
     private final ExecutorService mtpExecutor = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService usbPoller = Executors.newSingleThreadScheduledExecutor();
     private final AtomicBoolean isConnecting = new AtomicBoolean(false);
     private volatile boolean isScanning = false;
     private volatile String customWaypointPath = "Android/data/dji.go.v5/files/Waypoint";
@@ -84,6 +87,9 @@ public class MtpHelper {
             {".dji.go.v5", "Waypoint"},
             {"dji.go.v5", "waypoint"},
             {"dji.go.v5", "Waypoint"},
+            {"DJI", "dji.go.v5", "DJI_WAYPOINT"},
+            {"DJI", "DJI_WAYPOINT"},
+            {"DJI_WAYPOINT"},
             {".waypoint"},
             {"waypoint"},
             {"Waypoint"},
@@ -97,8 +103,8 @@ public class MtpHelper {
             {"DJI", "dji.go.v5", "files", "waypoint"},
             {"DJI", "Waypoint"},
             {"DJI", "waypoint"},
-            {"Waypoint"},
-            {"waypoint"}
+            {"Download"},
+            {"download"}
     };
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
@@ -152,9 +158,27 @@ public class MtpHelper {
         } catch (Exception ignored) {
             this.customWaypointPath = "Android/data/dji.go.v5/files/Waypoint";
         }
+
+        // Monitoreo periódico en segundo plano para hot-plug OTG y cambio de modo USB en RC 2
+        usbPoller.scheduleWithFixedDelay(() -> {
+            try {
+                if (!isDeviceConnected() && !isConnecting.get()) {
+                    HashMap<String, UsbDevice> devMap = usbManager.getDeviceList();
+                    if (devMap != null && !devMap.isEmpty()) {
+                        for (UsbDevice d : devMap.values()) {
+                            if (d.getDeviceClass() != UsbConstants.USB_CLASS_HUB) {
+                                findAndConnectDevice();
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }, 1500, 2500, TimeUnit.MILLISECONDS);
     }
 
     public void unregister() {
+        try { usbPoller.shutdownNow(); } catch (Exception ignored) {}
         try { context.unregisterReceiver(usbReceiver); } catch (Exception ignored) {}
         mtpExecutor.execute(this::closeConnection);
     }
@@ -176,6 +200,35 @@ public class MtpHelper {
     public void forceReconnect() {
         closeConnection();
         findAndConnectDevice();
+    }
+
+    public static boolean isCandidateUsbDevice(UsbDevice dev) {
+        if (dev == null) return false;
+        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_HUB) return false;
+
+        int vid = dev.getVendorId();
+        // VIDs conocidos: DJI (11427/0x2CA3), Google MTP (6353/0x18D1), Rockchip (8711/0x2207), MediaTek (3725), Qualcomm (1478)
+        if (vid == DJI_VENDOR_ID || vid == 6353 || vid == 8711 || vid == 3725 || vid == 1478) {
+            return true;
+        }
+
+        String prod = (dev.getProductName() != null) ? dev.getProductName().toLowerCase() : "";
+        String mfg = (dev.getManufacturerName() != null) ? dev.getManufacturerName().toLowerCase() : "";
+        if (prod.contains("dji") || prod.contains("rc 2") || prod.contains("rc2") || prod.contains("remote") || prod.contains("fly") || prod.contains("android")
+                || mfg.contains("dji") || mfg.contains("rockchip") || mfg.contains("google")) {
+            return true;
+        }
+
+        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE) return true;
+
+        for (int i = 0; i < dev.getInterfaceCount(); i++) {
+            android.hardware.usb.UsbInterface intf = dev.getInterface(i);
+            int ic = intf.getInterfaceClass();
+            if (ic == UsbConstants.USB_CLASS_STILL_IMAGE || ic == 255) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void findAndConnectDevice() {
@@ -203,37 +256,41 @@ public class MtpHelper {
             try {
                 HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
                 UsbDevice targetDevice = null;
+
+                // 1. Buscar coincidencia con criterios específicos de RC 2 / MTP
                 for (UsbDevice dev : deviceList.values()) {
-                    if (dev.getVendorId() == DJI_VENDOR_ID) {
-                        targetDevice = dev; break;
+                    if (isCandidateUsbDevice(dev)) {
+                        targetDevice = dev;
+                        break;
                     }
                 }
+
+                // 2. Si no hubo coincidencia por filtro específico pero hay un dispositivo no-hub conectado por OTG
                 if (targetDevice == null) {
                     for (UsbDevice dev : deviceList.values()) {
-                        for (int i = 0; i < dev.getInterfaceCount(); i++) {
-                            android.hardware.usb.UsbInterface intf = dev.getInterface(i);
-                            if (intf.getInterfaceClass() == UsbConstants.USB_CLASS_STILL_IMAGE) {
-                                targetDevice = dev; break;
-                            }
-                        }
-                        if (targetDevice != null) break;
-                    }
-                }
-                if (targetDevice == null) {
-                    for (UsbDevice dev : deviceList.values()) {
-                        if (dev.getDeviceClass() == UsbConstants.USB_CLASS_STILL_IMAGE) {
-                            targetDevice = dev; break;
+                        if (dev.getDeviceClass() != UsbConstants.USB_CLASS_HUB) {
+                            targetDevice = dev;
+                            callback.onLog("[USB] Dispositivo OTG conectado detectado: "
+                                    + (dev.getProductName() != null ? dev.getProductName() : "Dispositivo USB")
+                                    + " (VID:" + dev.getVendorId() + " PID:" + dev.getProductId() + ")");
+                            break;
                         }
                     }
                 }
+
                 if (targetDevice == null) {
                     callback.onDeviceStatus(false, "RC 2 no detectado");
                     return;
                 }
+
+                callback.onLog("[USB] Vinculando RC 2: "
+                        + (targetDevice.getProductName() != null ? targetDevice.getProductName() : "Control USB")
+                        + " (VID=" + targetDevice.getVendorId() + ", PID=" + targetDevice.getProductId() + ")");
+
                 if (usbManager.hasPermission(targetDevice)) {
                     openMtpDevice(targetDevice);
                 } else {
-                    callback.onLog("[USB] Solicitando permiso...");
+                    callback.onLog("[USB] Solicitando permiso al sistema Android...");
                     int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0;
                     PendingIntent pi = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), flags);
                     usbManager.requestPermission(targetDevice, pi);
@@ -635,52 +692,111 @@ public class MtpHelper {
         }
     }
 
+    public int findWaypointHandle(MtpDevice device, int storageId) {
+        if (customWaypointPath != null && !customWaypointPath.trim().isEmpty()) {
+            String cleanPath = customWaypointPath.trim().replaceAll("^/+|/+$", "");
+            String[] parts = cleanPath.split("[/\\\\]+");
+            int h = findHandleForPath(device, storageId, parts);
+            if (h != -1) return h;
+        }
+        for (String[] path : WAYPOINT_PATH_CANDIDATES) {
+            int h = findHandleForPath(device, storageId, path);
+            if (h != -1) return h;
+        }
+        return -1;
+    }
+
     private boolean injectKmzIntoStorage(MtpDevice device, int storageId, int waypointHandle, String slotGuid, File fileToSend) {
         try {
             int folderHandle = -1;
-            String targetFileName = slotGuid.endsWith(".kmz") ? slotGuid : (slotGuid + ".kmz");
+            int directFileHandle = -1;
+            String existingKmzName = null;
 
-            // Buscar carpeta del slot en waypointHandle (asegurando que sea directorio)
+            String baseGuid = slotGuid.endsWith(".kmz") ? slotGuid.substring(0, slotGuid.length() - 4) : slotGuid;
+            String kmzFileName = baseGuid + ".kmz";
+
+            // 1. Buscar en waypointHandle si la ranura existe como carpeta o como archivo directo
             int[] items = device.getObjectHandles(storageId, 0, waypointHandle);
             if (items != null) {
                 for (int h : items) {
                     MtpObjectInfo info = device.getObjectInfo(h);
                     if (info == null || info.getName() == null) continue;
-                    String iname = info.getName();
-                    if (slotGuid.equalsIgnoreCase(iname) && (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0)) {
+                    String iname = info.getName().trim();
+
+                    // Carpeta del slot (directorio)
+                    if ((iname.equalsIgnoreCase(baseGuid) || iname.equalsIgnoreCase(kmzFileName))
+                            && (info.getFormat() == MtpConstants.FORMAT_ASSOCIATION || info.getFormat() == 0)) {
                         folderHandle = h;
-                        break;
+                    }
+
+                    // Archivo directo con el nombre del slot en la raíz de waypoint
+                    if ((iname.equalsIgnoreCase(kmzFileName) || iname.equalsIgnoreCase(baseGuid))
+                            && info.getFormat() != MtpConstants.FORMAT_ASSOCIATION && info.getFormat() != 0) {
+                        directFileHandle = h;
                     }
                 }
             }
 
-            // Si no existe la carpeta del slot, crearla
+            // 2. Si la ranura original era un archivo directo en waypointHandle (sin subcarpeta)
+            if (folderHandle == -1 && directFileHandle != -1) {
+                callback.onLog("[MTP] Ranura directa localizada en RC 2: " + kmzFileName + ". Reemplazando archivo directo...");
+                device.deleteObject(directFileHandle);
+                try { Thread.sleep(100); } catch (Exception ignored) {}
+
+                MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
+                fb.setName(kmzFileName);
+                fb.setParent(waypointHandle);
+                fb.setStorageId(storageId);
+                fb.setCompressedSize(fileToSend.length());
+                fb.setFormat(MtpConstants.FORMAT_UNDEFINED);
+
+                MtpObjectInfo sent = device.sendObjectInfo(fb.build());
+                if (sent == null) {
+                    callback.onLog("[ERR] No se pudo crear el archivo directo " + kmzFileName + " en RC 2");
+                    return false;
+                }
+                try (ParcelFileDescriptor pfd = ParcelFileDescriptor.open(fileToSend, ParcelFileDescriptor.MODE_READ_ONLY)) {
+                    boolean sentOk = device.sendObject(sent.getObjectHandle(), (int) fileToSend.length(), pfd);
+                    callback.onLog("[MTP] Transmisión directa (" + fileToSend.length() + " B): " + (sentOk ? "✅ ÉXITO" : "❌ FALLÓ"));
+                    return sentOk;
+                }
+            }
+
+            // 3. Si existe un archivo directo huérfano con el mismo nombre en la raíz de waypoints, eliminarlo para evitar misiones duplicadas
+            if (directFileHandle != -1) {
+                callback.onLog("[MTP] Eliminando archivo huérfano para evitar duplicados...");
+                device.deleteObject(directFileHandle);
+                try { Thread.sleep(50); } catch (Exception ignored) {}
+            }
+
+            // 4. Si no existe la carpeta del slot, crearla
             if (folderHandle == -1) {
                 MtpObjectInfo.Builder b = new MtpObjectInfo.Builder();
-                b.setName(slotGuid);
+                b.setName(baseGuid);
                 b.setParent(waypointHandle);
                 b.setStorageId(storageId);
                 b.setFormat(MtpConstants.FORMAT_ASSOCIATION);
                 MtpObjectInfo created = device.sendObjectInfo(b.build());
                 if (created != null) {
                     folderHandle = created.getObjectHandle();
-                    callback.onLog("[MTP] Ranura nueva creada en RC 2: " + slotGuid);
+                    callback.onLog("[MTP] Ranura nueva creada en RC 2: " + baseGuid);
                 } else {
-                    callback.onLog("[ERR] No se pudo crear la carpeta del slot " + slotGuid);
+                    callback.onLog("[ERR] No se pudo crear la carpeta del slot " + baseGuid);
                     return false;
                 }
             } else {
-                callback.onLog("[MTP] Ranura existente localizada en RC 2: " + slotGuid);
+                callback.onLog("[MTP] Ranura existente localizada en RC 2: " + baseGuid);
             }
 
-            // Limpiar archivos anteriores en la carpeta del slot (KMZ anterior, previews, backups)
+            // 5. Limpiar archivos anteriores en la carpeta del slot (KMZ anterior, previews, backups)
             int[] sub = device.getObjectHandles(storageId, 0, folderHandle);
             if (sub != null && sub.length > 0) {
                 for (int sh : sub) {
                     MtpObjectInfo subObj = device.getObjectInfo(sh);
                     if (subObj != null && subObj.getName() != null) {
-                        String sName = subObj.getName().toLowerCase();
+                        String sName = subObj.getName().trim().toLowerCase();
                         if (sName.endsWith(".kmz") || sName.endsWith(".jpg") || sName.endsWith(".png") || sName.endsWith(".tmp") || sName.endsWith(".bak")) {
+                            if (sName.endsWith(".kmz")) existingKmzName = subObj.getName().trim();
                             boolean del = device.deleteObject(sh);
                             callback.onLog("[MTP] Limpiando previo " + subObj.getName() + ": " + (del ? "OK" : "omitido"));
                         }
@@ -688,7 +804,9 @@ public class MtpHelper {
                 }
             }
 
-            // Inyectar el nuevo KMZ nativo DJI Fly
+            String targetFileName = (existingKmzName != null && !existingKmzName.isEmpty()) ? existingKmzName : kmzFileName;
+
+            // 6. Inyectar el nuevo KMZ nativo DJI Fly
             MtpObjectInfo.Builder fb = new MtpObjectInfo.Builder();
             fb.setName(targetFileName);
             fb.setParent(folderHandle);
@@ -707,7 +825,7 @@ public class MtpHelper {
                 } catch (Exception ignored) {}
 
                 MtpObjectInfo.Builder rb = new MtpObjectInfo.Builder();
-                rb.setName(slotGuid);
+                rb.setName(baseGuid);
                 rb.setParent(waypointHandle);
                 rb.setStorageId(storageId);
                 rb.setFormat(MtpConstants.FORMAT_ASSOCIATION);
@@ -759,45 +877,60 @@ public class MtpHelper {
             }
 
             List<Integer> prioritizedIds = getPrioritizedStorageIds(device, storageIds);
-            boolean success = false;
-            int writeCount = 0;
 
-            for (int storageId : prioritizedIds) {
-                MtpStorageInfo si = device.getStorageInfo(storageId);
-                String storageName = (si != null && si.getDescription() != null && !si.getDescription().trim().isEmpty()) ? si.getDescription() : ("Unidad " + storageId);
-                boolean isInternal = storageName.toLowerCase().contains("interno") || storageName.toLowerCase().contains("internal") || storageName.toLowerCase().contains("compartido");
+            // PASO 1: Localizar la unidad de almacenamiento donde reside exactamente esta ranura
+            int targetStorageId = -1;
+            int targetWaypointHandle = -1;
+            String baseGuid = slotGuid.endsWith(".kmz") ? slotGuid.substring(0, slotGuid.length() - 4) : slotGuid;
 
-                // Buscar carpeta Waypoint en esta unidad
-                int waypointHandle = -1;
-                if (customWaypointPath != null && !customWaypointPath.trim().isEmpty()) {
-                    String cleanPath = customWaypointPath.trim().replaceAll("^/+|/+$", "");
-                    String[] parts = cleanPath.split("[/\\\\]+");
-                    waypointHandle = findHandleForPath(device, storageId, parts);
-                }
-                if (waypointHandle == -1) {
-                    for (String[] path : WAYPOINT_PATH_CANDIDATES) {
-                        waypointHandle = findHandleForPath(device, storageId, path);
-                        if (waypointHandle != -1) break;
+            for (int sId : prioritizedIds) {
+                int wHandle = findWaypointHandle(device, sId);
+                if (wHandle != -1) {
+                    int[] items = device.getObjectHandles(sId, 0, wHandle);
+                    if (items != null) {
+                        for (int h : items) {
+                            MtpObjectInfo info = device.getObjectInfo(h);
+                            if (info != null && info.getName() != null) {
+                                String iname = info.getName().trim();
+                                if (iname.equalsIgnoreCase(baseGuid) || iname.equalsIgnoreCase(baseGuid + ".kmz")) {
+                                    targetStorageId = sId;
+                                    targetWaypointHandle = wHandle;
+                                    break;
+                                }
+                            }
+                        }
                     }
+                    if (targetStorageId != -1) break;
                 }
+            }
 
-                if (waypointHandle != -1) {
-                    callback.onLog("[MTP] Inyectando en " + storageName + (isInternal ? " [MEMORIA INTERNA]" : " [TARJETA SD]") + "...");
-                    boolean ok = injectKmzIntoStorage(device, storageId, waypointHandle, slotGuid, fileToSend);
-                    if (ok) {
-                        writeCount++;
-                        success = true;
-                        callback.onLog("[OK] ✅ Misión escrita en " + storageName);
+            // PASO 2: Si no existía previamente, usar la primera unidad disponible (Memoria Interna preferida)
+            if (targetStorageId == -1) {
+                for (int sId : prioritizedIds) {
+                    int wHandle = findWaypointHandle(device, sId);
+                    if (wHandle != -1) {
+                        targetStorageId = sId;
+                        targetWaypointHandle = wHandle;
+                        break;
                     }
                 }
             }
 
-            if (success) {
-                callback.onLog("[OK] 🎉 ¡Misión " + localFile.getName() + " inyectada con éxito en RC 2 (" + fileToSend.length() + " bytes)! (" + writeCount + " unidad/es sincronizada/s)");
-                callback.onLog("[DJI FLY] ⚠️ En el RC 2: si DJI Fly está abierto, ciérralo en apps recientes (desliza hacia arriba) y ábrelo de nuevo para refrescar las misiones.");
-                return true;
+            if (targetStorageId != -1 && targetWaypointHandle != -1) {
+                MtpStorageInfo si = device.getStorageInfo(targetStorageId);
+                String storageName = (si != null && si.getDescription() != null && !si.getDescription().trim().isEmpty()) ? si.getDescription() : ("Unidad " + targetStorageId);
+                callback.onLog("[MTP] Sobreescribiendo slot '" + slotGuid + "' en: " + storageName + "...");
+                boolean ok = injectKmzIntoStorage(device, targetStorageId, targetWaypointHandle, slotGuid, fileToSend);
+                if (ok) {
+                    callback.onLog("[OK] 🎉 ¡Misión " + localFile.getName() + " sobreescrita con éxito en RC 2!");
+                    callback.onLog("[DJI FLY] ⚠️ En el RC 2: si DJI Fly está abierto, ciérralo en apps recientes (desliza hacia arriba) y ábrelo de nuevo para refrescar las misiones.");
+                    return true;
+                } else {
+                    callback.onLog("[ERR] Falló la inyección en la unidad " + storageName);
+                    return false;
+                }
             } else {
-                callback.onLog("[ERR] No se pudo inyectar la misión en ninguna unidad del RC 2.");
+                callback.onLog("[ERR] No se encontró ninguna carpeta de Waypoint válida en el RC 2.");
                 return false;
             }
         } catch (Exception e) {
@@ -815,8 +948,8 @@ public class MtpHelper {
             File fileToSend = WpmlKmzBuilder.buildPureDjiKmz(localFile, context.getCacheDir(), slotGuid);
             List<File> candidates = new ArrayList<>();
             candidates.add(new File("/storage/emulated/0/Android/data/dji.go.v5/files/waypoint"));
-            candidates.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
             candidates.add(new File("/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint"));
+            candidates.add(new File("/sdcard/Android/data/dji.go.v5/files/waypoint"));
             candidates.add(new File("/sdcard/Android/data/dji.go.v5/files/Waypoint"));
             candidates.add(new File("/storage/emulated/0/.dji.go.v5/waypoint"));
             candidates.add(new File("/sdcard/.dji.go.v5/waypoint"));
@@ -831,22 +964,31 @@ public class MtpHelper {
                         for (File m : mounts) {
                             if (m.isDirectory() && !m.getName().equals("emulated") && !m.getName().equals("self")) {
                                 candidates.add(new File(m, "Android/data/dji.go.v5/files/waypoint"));
+                                candidates.add(new File(m, "Android/data/dji.go.v5/files/Waypoint"));
                             }
                         }
                     }
                 }
             } catch (Exception ignored) {}
 
-            boolean anyWritten = false;
+            boolean written = false;
             for (File cDir : candidates) {
                 try {
-                    if (!cDir.exists()) cDir.mkdirs();
                     if (cDir.exists() && cDir.isDirectory()) {
                         File sDir = new File(cDir, slotGuid);
                         if (!sDir.exists()) sDir.mkdirs();
                         File dest = new File(sDir, slotGuid + ".kmz");
 
-                        boolean written = false;
+                        // Limpiar archivos anteriores en la ranura
+                        File[] oldFiles = sDir.listFiles();
+                        if (oldFiles != null) {
+                            for (File of : oldFiles) {
+                                if (of.getName().toLowerCase().endsWith(".kmz") || of.getName().toLowerCase().endsWith(".jpg") || of.getName().toLowerCase().endsWith(".png")) {
+                                    try { of.delete(); } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+
                         try (FileInputStream in = new FileInputStream(fileToSend);
                              FileOutputStream out = new FileOutputStream(dest)) {
                             byte[] buf = new byte[8192];
@@ -865,14 +1007,10 @@ public class MtpHelper {
                         }
 
                         if (written) {
-                            File[] oldFiles = sDir.listFiles((d, name) -> name != null && (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bak") || name.endsWith(".tmp")));
-                            if (oldFiles != null) {
-                                for (File of : oldFiles) try { of.delete(); } catch (Exception ignored) {}
-                            }
                             dest.setLastModified(System.currentTimeMillis());
                             sDir.setLastModified(System.currentTimeMillis());
-                            anyWritten = true;
                             callback.onLog("[OK] ✅ Misión sobreescrita en: " + dest.getAbsolutePath());
+                            break; // DETENER: Escrito en la primera carpeta válida, NUNCA duplicar
                         }
                     }
                 } catch (Exception e) {
@@ -880,22 +1018,7 @@ public class MtpHelper {
                 }
             }
 
-            // Guardar también copia en Downloads/dronmxE_rc2
-            try {
-                File dlRc2 = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "dronmxE_rc2");
-                if (!dlRc2.exists()) dlRc2.mkdirs();
-                File sDir = new File(dlRc2, slotGuid);
-                if (!sDir.exists()) sDir.mkdirs();
-                File dest = new File(sDir, slotGuid + ".kmz");
-                try (FileInputStream in = new FileInputStream(fileToSend);
-                     FileOutputStream out = new FileOutputStream(dest)) {
-                    byte[] buf = new byte[8192];
-                    int r;
-                    while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-                }
-            } catch (Exception ignored) {}
-
-            if (anyWritten) {
+            if (written) {
                 callback.onLog("[OK] 🎉 Sobreescritura completada en almacenamiento interno del RC 2.");
                 callback.onLog("[DJI FLY] ⚠️ En el RC 2: Cierra DJI Fly en apps recientes (desliza hacia arriba) y ábrelo de nuevo para ver los cambios.");
                 return true;

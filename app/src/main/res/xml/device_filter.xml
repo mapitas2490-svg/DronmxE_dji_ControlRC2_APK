@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- DJI RC 2 Controller VID: 0x2CA3, PID: 0x1021 -->
-    <usb-device vendor-id="11427" product-id="4129" />
-    <!-- DJI RC Pro / Other DJI Controllers VID 0x2CA3 -->
+    <!-- DJI RC 2 Controller VID: 0x2CA3 (11427) -->
     <usb-device vendor-id="11427" />
+    <usb-device vendor-id="11427" product-id="4129" />
+    <!-- Android MTP / AOSP USB VID: 0x18D1 (6353) - RC 2 in standard MTP mode -->
+    <usb-device vendor-id="6353" />
+    <!-- Rockchip USB VID: 0x2207 (8711) - RC 2 processor VID -->
+    <usb-device vendor-id="8711" />
+    <!-- MediaTek USB VID: 0x0E8D (3725) -->
+    <usb-device vendor-id="3725" />
+    <!-- Qualcomm USB VID: 0x05C6 (1478) -->
+    <usb-device vendor-id="1478" />
     <!-- Standard MTP Device Class -->
     <usb-device class="6" subclass="1" protocol="1" />
+    <!-- Still Image / PTP / MTP -->
+    <usb-device class="6" />
+    <!-- Android MTP Composite Class -->
+    <usb-device class="255" />
 </resources>
