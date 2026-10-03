@@ -1403,69 +1403,7 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         null);
                 } catch (Exception ignored) {}
 
-                boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
                 boolean isRc = MainActivity.isDjiRcDevice();
-
-                String effectiveSlot = (targetSlotGuid != null && !targetSlotGuid.trim().isEmpty() && !"NEW".equalsIgnoreCase(targetSlotGuid.trim()))
-                        ? targetSlotGuid.trim()
-                        : null;
-
-                // 3. Si se especificó una ranura para sobreescribir, guardar con el nombre de la ranura
-                if (effectiveSlot != null) {
-                    try {
-                        File kmzSlot = new File(downloadDir, effectiveSlot + ".kmz");
-                        try (FileOutputStream fos = new FileOutputStream(kmzSlot)) {
-                            fos.write(decodedBytes);
-                            fos.flush();
-                        }
-                    } catch (Exception ignored) {}
-                }
-
-                // 4. Si estamos físicamente en el control RC 2, inyectar a DJI Fly
-                if (isRc) {
-                    String slotToInject = effectiveSlot != null ? effectiveSlot : missionName;
-                    String[] directDjiDirs = new String[]{
-                        "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint",
-                        "/sdcard/Android/data/dji.go.v5/files/waypoint",
-                        "/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint",
-                        "/sdcard/Android/data/dji.go.v5/files/Waypoint"
-                    };
-
-                    for (String djiRootPath : directDjiDirs) {
-                        try {
-                            File djiRoot = new File(djiRootPath);
-                            if (djiRoot.exists() && djiRoot.isDirectory()) {
-                                File slotFolder = new File(djiRoot, slotToInject);
-                                if (!slotFolder.exists()) slotFolder.mkdirs();
-                                File slotKmz = new File(slotFolder, slotToInject + ".kmz");
-                                try (FileOutputStream fos = new FileOutputStream(slotKmz)) {
-                                    fos.write(decodedBytes);
-                                    fos.flush();
-                                } catch (Exception ex) {
-                                    try {
-                                        Process p = Runtime.getRuntime().exec(new String[]{
-                                            "sh", "-c", "mkdir -p \"" + slotFolder.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + slotKmz.getAbsolutePath() + "\" && chmod 666 \"" + slotKmz.getAbsolutePath() + "\""
-                                        });
-                                        p.waitFor();
-                                    } catch (Exception ignored) {}
-                                }
-                                slotKmz.setLastModified(System.currentTimeMillis());
-                                slotFolder.setLastModified(System.currentTimeMillis());
-                            }
-                        } catch (Exception ignored) {}
-                    }
-                }
-
-                // 5. Si hay control RC 2 conectado por USB MTP:
-                if (isUsbConnected) {
-                    new Thread(() -> {
-                        if (effectiveSlot != null) {
-                            mtpHelper.overwriteMissionKmz(effectiveSlot, kmzFile);
-                        } else {
-                            mtpHelper.createNewMissionSlot(kmzFile);
-                        }
-                    }).start();
-                }
 
                 synchronized (availableKmzFiles) {
                     if (kmzDronmxe != null && !availableKmzFiles.contains(kmzDronmxe)) {
@@ -1480,14 +1418,13 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 result.put("success", true);
 
                 fetchLocalMissionsAsync();
-                fetchDeviceSlotsAsync();
 
                 runOnUiThread(() -> {
                     String msg = isRc 
-                        ? "✅ Misión guardada en Almacenamiento interno/Download y lista en DJI Fly"
+                        ? "✅ Misión guardada en Almacenamiento interno/Download"
                         : "✅ Misión exportada a Download/" + missionName + ".kmz";
                     Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-                    notifyJs("refreshLocalMissions(); refreshDeviceSlots();");
+                    notifyJs("refreshLocalMissions();");
                 });
             } catch (Exception e) {
                 try {

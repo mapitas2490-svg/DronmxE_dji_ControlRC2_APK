@@ -2616,7 +2616,7 @@
   </div>
   <div class="bbtns">
     <button class="bsync" id="btn-sync" disabled onclick="injectSelectedLocalToDevice()">
-      ⚡ SOBREESCRIBIR EN RC 2
+      SOBREESCRIBIR EN RC 2
     </button>
   </div>
   <button class="ltog" onclick="toggleLog()">[+] Consola MTP en tiempo real</button>
@@ -3021,18 +3021,7 @@
     }
 
     async function autoExportCurrentMissionKmz() {
-      try {
-        const cur = (AppState.currentMissionIdx !== null && AppState.currentMissionIdx !== undefined) ? AppState.savedMissions[AppState.currentMissionIdx] : null;
-        const name = cur ? cur.name : (AppState.currentMissionName || 'Mision_1');
-        if (typeof buildDjiKmzBlob === 'function' && AppState.points.length >= 2) {
-          const base64Data = await buildDjiKmzBlob(name);
-          if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
-            window.AndroidBridge.saveKmzMission(base64Data, name, "NEW");
-          }
-        }
-      } catch (e) {
-        console.error("Auto export KMZ error:", e);
-      }
+      // Intencionalmente vacío: Modificar parámetros de vuelo NO debe inyectar ni duplicar ranuras en el RC 2
     }
 
     function setMissionMode(mode) {
@@ -3782,10 +3771,6 @@
             renderMissionsList();
             renderBoundary();
             updateLockStatusBadge();
-            autoExportCurrentMissionKmz();
-            if (window.AndroidBridge && window.AndroidBridge.showToast) {
-              window.AndroidBridge.showToast("🔒 Misión '" + cur.name + "' asegurada con candado.");
-            }
           }
         }
       } else if (viewName === 'config') {
@@ -4791,7 +4776,6 @@ function renderDeviceSlots(){
           +'<div class="msub guid-txt">'+subIdLabel+esc(shortGuid(slot.guid))+'</div>'
         +'</div>'
         +'<div class="mact">'
-          +'<button class="btn-sync-direct" title="⚡ Sobreescribir con la misión seleccionada" onclick="directOverwriteSlot(\''+esc(slot.guid)+'\', event)">⚡</button>'
           +'<button class="btn-earth" title="Abrir y verificar en Google Earth" onclick="openDeviceSlotInGoogleEarth(\''+esc(slot.guid)+'\', event)">🌍</button>'
           +'<button class="btn-del" title="Eliminar" onclick="deleteDeviceSlotItem(\''+esc(slot.guid)+'\', \''+esc(nameStr)+'\', event)">🗑️</button>'
         +'</div>'
@@ -5188,7 +5172,7 @@ function injectSelectedLocalToDevice(){
     var targetFileParam = S.selLocalMission.path || S.selLocalMission.name;
     var ok = window.AndroidBridge.overwriteSlotFromLocal(guid, targetFileParam);
     setTimeout(function(){
-      if(syncBtn){ syncBtn.disabled = false; syncBtn.textContent = '⚡ SOBREESCRIBIR EN RC 2'; }
+      if(syncBtn){ syncBtn.disabled = false; syncBtn.textContent = 'SOBREESCRIBIR EN RC 2'; }
       refreshDeviceSlots();
     }, 2500);
   }
