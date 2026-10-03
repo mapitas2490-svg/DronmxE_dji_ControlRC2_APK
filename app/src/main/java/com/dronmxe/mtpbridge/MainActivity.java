@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -367,10 +368,9 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
             return true;
         }
 
-        File djiFolder = new File("/storage/emulated/0/Android/data/dji.go.v5");
-        File djiFolder2 = new File("/sdcard/Android/data/dji.go.v5");
         File djiSys = new File("/system/priv-app/dji.go.v5");
-        return djiFolder.exists() || djiFolder2.exists() || djiSys.exists();
+        File djiSys2 = new File("/system/app/dji.go.v5");
+        return djiSys.exists() || djiSys2.exists();
     }
 
     public class BridgeInterface {
@@ -449,9 +449,12 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         public String getDeviceSlotsJson() {
             try {
                 List<MtpHelper.DeviceSlotInfo> slots = new ArrayList<>();
+                boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
                 boolean isRc = MainActivity.isDjiRcDevice();
 
-                if (isRc) {
+                if (isUsbConnected) {
+                    slots = mtpHelper.getDeviceSlotsDetailed();
+                } else if (isRc) {
                     slots = getLocalRc2DownloadSlots();
                 } else {
                     slots = mtpHelper.getDeviceSlotsDetailed();
@@ -591,72 +594,96 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
                     JSONArray arr = new JSONArray();
                     for (File f : availableKmzFiles) {
-                        JSONObject obj = new JSONObject();
-                        obj.put("name", f.getName());
-                        obj.put("path", f.getAbsolutePath());
-                        obj.put("size", f.length());
-                        obj.put("dateModified", f.lastModified());
+                        try {
+                            JSONObject obj = new JSONObject();
+                            obj.put("name", f.getName());
+                            obj.put("path", f.getAbsolutePath());
+                            obj.put("size", f.length());
+                            obj.put("dateModified", f.lastModified());
 
-                        String tag = "Teléfono";
-                        if (f.getParent() != null) {
-                            String parent = new File(f.getParent()).getName();
-                            if (parent.equals("cache")) tag = "Compartido";
-                            else if (parent.equalsIgnoreCase("Download")) tag = "Descargas";
-                            else if (parent.equalsIgnoreCase("dronmxE")) tag = "dronmxE";
-                            else if (parent.equalsIgnoreCase("helpers")) tag = "helpers";
-                            else tag = parent;
-                        }
-                        obj.put("tag", tag);
+                            String tag = "Descargas";
+                            if (f.getParent() != null) {
+                                String parent = new File(f.getParent()).getName();
+                                if (parent.equals("cache")) tag = "Compartido";
+                                else if (parent.equalsIgnoreCase("Download")) tag = "Descargas";
+                                else if (parent.equalsIgnoreCase("dronmxE")) tag = "dronmxE";
+                                else if (parent.equalsIgnoreCase("helpers")) tag = "helpers";
+                                else tag = parent;
+                            }
+                            obj.put("tag", tag);
 
-                        List<WpmlKmzBuilder.Waypoint> wps = WpmlKmzBuilder.extractWaypoints(f);
-                        obj.put("wpCount", wps.size());
-                        JSONArray coordsArr = new JSONArray();
-                        for (WpmlKmzBuilder.Waypoint wp : wps) {
-                            JSONArray pt = new JSONArray();
-                            pt.put(wp.lon);
-                            pt.put(wp.lat);
-                            coordsArr.put(pt);
+                            List<WpmlKmzBuilder.Waypoint> wps = new ArrayList<>();
+                            try {
+                                wps = WpmlKmzBuilder.extractWaypoints(f);
+                            } catch (Exception ignored) {}
+
+                            obj.put("wpCount", wps.size());
+                            JSONArray coordsArr = new JSONArray();
+                            for (WpmlKmzBuilder.Waypoint wp : wps) {
+                                JSONArray pt = new JSONArray();
+                                pt.put(wp.lon);
+                                pt.put(wp.lat);
+                                coordsArr.put(pt);
+                            }
+                            obj.put("coords", coordsArr);
+
+                            if (wps.isEmpty() && f.length() > 0 && f.length() < 4000000) {
+                                try (FileInputStream fis = new FileInputStream(f)) {
+                                    byte[] b = new byte[(int) f.length()];
+                                    int r = 0;
+                                    while (r < b.length) {
+                                        int n = fis.read(b, r, b.length - r);
+                                        if (n == -1) break;
+                                        r += n;
+                                    }
+                                    obj.put("base64", android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP));
+                                } catch (Exception ignored) {}
+                            }
+
+                            arr.put(obj);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Error serializando archivo kmz: " + f.getName(), ex);
                         }
-                        obj.put("coords", coordsArr);
-                        arr.put(obj);
                     }
 
-                    // Scan RC2 Download folder via MTP
-                    try {
-                        List<MtpHelper.RemoteKmzFile> remoteKmzFiles = mtpHelper.scanDownloadKmzFiles();
-                        for (MtpHelper.RemoteKmzFile rk : remoteKmzFiles) {
-                            boolean alreadyHave = false;
-                            for (File f : availableKmzFiles) {
-                                if (f.getName().equalsIgnoreCase(rk.name)) { alreadyHave = true; break; }
-                            }
-                            if (alreadyHave) continue;
-
-                            JSONObject obj = new JSONObject();
-                            obj.put("name", rk.name);
-                            obj.put("path", "mtp://rc2/Download/" + rk.name);
-                            obj.put("size", rk.size);
-                            obj.put("dateModified", rk.dateModified);
-                            obj.put("tag", "RC2-Download");
-                            obj.put("remoteHandle", rk.handle);
-
-                            if (rk.size > 0 && rk.size < 3000000) {
-                                byte[] data = mtpHelper.readRemoteBytes(rk.handle, (int) rk.size);
-                                if (data != null && data.length > 0) {
-                                    MtpHelper.KmzParsedInfo pi = mtpHelper.parseKmzFast(data);
-                                    obj.put("wpCount", pi.wpCount);
-                                    JSONArray cArr = new JSONArray();
-                                    for (double[] pt : pi.coords) {
-                                        JSONArray p = new JSONArray();
-                                        p.put(pt[0]);
-                                        p.put(pt[1]);
-                                        cArr.put(p);
-                                    }
-                                    obj.put("coords", cArr);
+                    // Scan RC2 Download folder via MTP (si está conectado por cable USB)
+                    if (mtpHelper != null && mtpHelper.isDeviceConnected()) {
+                        try {
+                            List<MtpHelper.RemoteKmzFile> remoteKmzFiles = mtpHelper.scanDownloadKmzFiles();
+                            for (MtpHelper.RemoteKmzFile rk : remoteKmzFiles) {
+                                boolean alreadyHave = false;
+                                for (File f : availableKmzFiles) {
+                                    if (f.getName().equalsIgnoreCase(rk.name)) { alreadyHave = true; break; }
                                 }
+                                if (alreadyHave) continue;
+
+                                JSONObject obj = new JSONObject();
+                                obj.put("name", rk.name);
+                                obj.put("path", "mtp://rc2/Download/" + rk.name);
+                                obj.put("size", rk.size);
+                                obj.put("dateModified", rk.dateModified);
+                                obj.put("tag", "RC2-Download");
+                                obj.put("remoteHandle", rk.handle);
+
+                                if (rk.size > 0 && rk.size < 3000000) {
+                                    byte[] data = mtpHelper.readRemoteBytes(rk.handle, (int) rk.size);
+                                    if (data != null && data.length > 0) {
+                                        MtpHelper.KmzParsedInfo pi = mtpHelper.parseKmzFast(data);
+                                        obj.put("wpCount", pi.wpCount);
+                                        JSONArray cArr = new JSONArray();
+                                        for (double[] pt : pi.coords) {
+                                            JSONArray p = new JSONArray();
+                                            p.put(pt[0]);
+                                            p.put(pt[1]);
+                                            cArr.put(p);
+                                        }
+                                        obj.put("coords", cArr);
+                                    }
+                                }
+                                arr.put(obj);
                             }
-                            arr.put(obj);
-                        }
-                    } catch (Exception ignored) {}
+                        } catch (Exception ignored) {}
+                    }
 
                     return arr.toString();
                 }
@@ -773,7 +800,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         return;
                     }
 
-                    boolean isRc = MainActivity.isDjiRcDevice();
+                    boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
+                    boolean isRc = !isUsbConnected && MainActivity.isDjiRcDevice();
                     boolean ok = false;
 
                     if (isRc) {
@@ -894,7 +922,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                         return;
                     }
 
-                    boolean isRc = MainActivity.isDjiRcDevice();
+                    boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
+                    boolean isRc = !isUsbConnected && MainActivity.isDjiRcDevice();
                     boolean ok = false;
 
                     if (isRc) {
@@ -976,8 +1005,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public void downloadDeviceSlot(String slotGuid) {
             new Thread(() -> {
-                boolean isRc = MainActivity.isDjiRcDevice();
-                if (isRc) {
+                boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
+                if (!isUsbConnected && MainActivity.isDjiRcDevice()) {
                     showToast("✅ La misión ya se encuentra en Almacenamiento interno/Download");
                     return;
                 }
@@ -1199,7 +1228,8 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
         @JavascriptInterface
         public boolean deleteDeviceSlot(String slotGuid) {
             new Thread(() -> {
-                boolean isRc = MainActivity.isDjiRcDevice();
+                boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
+                boolean isRc = !isUsbConnected && MainActivity.isDjiRcDevice();
                 boolean ok = false;
                 if (isRc) {
                     try {
@@ -1319,107 +1349,91 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
                 File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 if (!downloadDir.exists()) downloadDir.mkdirs();
 
+                // 1. Guardar en /sdcard/Download/{missionName}.kmz
                 File kmzFile = new File(downloadDir, missionName + ".kmz");
                 try (FileOutputStream fos = new FileOutputStream(kmzFile)) {
                     fos.write(decodedBytes);
+                    fos.flush();
                 }
 
+                // 2. Guardar también en /sdcard/Download/dronmxE/{missionName}.kmz
+                File dronmxeDir = new File(downloadDir, "dronmxE");
+                if (!dronmxeDir.exists()) dronmxeDir.mkdirs();
+                File kmzDronmxe = new File(dronmxeDir, missionName + ".kmz");
+                try (FileOutputStream fos = new FileOutputStream(kmzDronmxe)) {
+                    fos.write(decodedBytes);
+                    fos.flush();
+                } catch (Exception ignored) {}
+
+                // Notificar al MediaScanner inmediatamente
+                try {
+                    MediaScannerConnection.scanFile(MainActivity.this,
+                        new String[]{kmzFile.getAbsolutePath(), kmzDronmxe.getAbsolutePath()},
+                        new String[]{"application/vnd.google-earth.kmz", "application/vnd.google-earth.kmz"},
+                        null);
+                } catch (Exception ignored) {}
+
+                boolean isUsbConnected = (mtpHelper != null && mtpHelper.isDeviceConnected());
                 boolean isRc = MainActivity.isDjiRcDevice();
-                File kmzDronmxe = null;
-
-                // Solo si NO es RC 2 (es decir, en teléfono o tablet), guardar también en Download/dronmxE/
-                if (!isRc) {
-                    File dronmxeDir = new File(downloadDir, "dronmxE");
-                    if (!dronmxeDir.exists()) dronmxeDir.mkdirs();
-                    kmzDronmxe = new File(dronmxeDir, missionName + ".kmz");
-                    try (FileOutputStream fos = new FileOutputStream(kmzDronmxe)) {
-                        fos.write(decodedBytes);
-                    } catch (Exception ignored) {}
-                }
 
                 String effectiveSlot = (targetSlotGuid != null && !targetSlotGuid.trim().isEmpty() && !"NEW".equalsIgnoreCase(targetSlotGuid.trim()))
                         ? targetSlotGuid.trim()
-                        : "DF5F9C06-1155-4737-9376-B36B0DD6E9F8";
+                        : null;
 
-                // Guardar también con el nombre de la ranura en /Download/
-                try {
-                    File kmzSlot = new File(downloadDir, effectiveSlot + ".kmz");
-                    try (FileOutputStream fos = new FileOutputStream(kmzSlot)) {
-                        fos.write(decodedBytes);
-                    }
-                } catch (Exception ignored) {}
-
-                // Guardar y sobreescribir en las carpetas de DJI Fly (memoria interna de RC 2)
-                String[] directDjiDirs = new String[]{
-                    "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint",
-                    "/sdcard/Android/data/dji.go.v5/files/waypoint",
-                    "/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint",
-                    "/sdcard/Android/data/dji.go.v5/files/Waypoint",
-                    "/storage/emulated/0/.dji.go.v5/waypoint",
-                    "/sdcard/.dji.go.v5/waypoint",
-                    "/storage/emulated/0/.waypoint",
-                    "/sdcard/.waypoint"
-                };
-
-                for (String djiRootPath : directDjiDirs) {
+                // 3. Si se especificó una ranura para sobreescribir, guardar con el nombre de la ranura
+                if (effectiveSlot != null) {
                     try {
-                        File djiRoot = new File(djiRootPath);
-                        if (!djiRoot.exists()) djiRoot.mkdirs();
-                        if (djiRoot.exists() && djiRoot.isDirectory()) {
-                            // 1. Ranura por GUID
-                            File slotFolder = new File(djiRoot, effectiveSlot);
-                            if (!slotFolder.exists()) slotFolder.mkdirs();
-                            File slotKmz = new File(slotFolder, effectiveSlot + ".kmz");
-
-                            boolean written = false;
-                            try (FileOutputStream fos = new FileOutputStream(slotKmz)) {
-                                fos.write(decodedBytes);
-                                written = true;
-                            } catch (Exception ex) {
-                                try {
-                                    Process p = Runtime.getRuntime().exec(new String[]{
-                                        "sh", "-c", "mkdir -p \"" + slotFolder.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + slotKmz.getAbsolutePath() + "\" && chmod 666 \"" + slotKmz.getAbsolutePath() + "\""
-                                    });
-                                    p.waitFor();
-                                    if (slotKmz.exists() && slotKmz.length() > 0) written = true;
-                                } catch (Exception ignored) {}
-                            }
-
-                            if (written) {
-                                File[] oldFiles = slotFolder.listFiles((dir, name) -> name != null && (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".bak") || name.endsWith(".tmp")));
-                                if (oldFiles != null) {
-                                    for (File of : oldFiles) try { of.delete(); } catch (Exception ignored) {}
-                                }
-                                slotKmz.setLastModified(System.currentTimeMillis());
-                                slotFolder.setLastModified(System.currentTimeMillis());
-                            }
-
-                            // 2. Ranura por nombre de misión (si difiere)
-                            if (!missionName.equalsIgnoreCase(effectiveSlot)) {
-                                File missionFolder = new File(djiRoot, missionName);
-                                if (!missionFolder.exists()) missionFolder.mkdirs();
-                                File directKmz = new File(missionFolder, missionName + ".kmz");
-                                try (FileOutputStream fos = new FileOutputStream(directKmz)) {
-                                    fos.write(decodedBytes);
-                                } catch (Exception ex) {
-                                    try {
-                                        Process p = Runtime.getRuntime().exec(new String[]{
-                                            "sh", "-c", "mkdir -p \"" + missionFolder.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + directKmz.getAbsolutePath() + "\" && chmod 666 \"" + directKmz.getAbsolutePath() + "\""
-                                        });
-                                        p.waitFor();
-                                    } catch (Exception ignored) {}
-                                }
-                                directKmz.setLastModified(System.currentTimeMillis());
-                                missionFolder.setLastModified(System.currentTimeMillis());
-                            }
+                        File kmzSlot = new File(downloadDir, effectiveSlot + ".kmz");
+                        try (FileOutputStream fos = new FileOutputStream(kmzSlot)) {
+                            fos.write(decodedBytes);
+                            fos.flush();
                         }
                     } catch (Exception ignored) {}
                 }
 
-                // Si hay control remoto conectado por cable USB MTP, sincronizar inmediatamente
-                if (mtpHelper != null && mtpHelper.isDeviceConnected()) {
+                // 4. Si estamos físicamente en el control RC 2, inyectar a DJI Fly
+                if (isRc) {
+                    String slotToInject = effectiveSlot != null ? effectiveSlot : missionName;
+                    String[] directDjiDirs = new String[]{
+                        "/storage/emulated/0/Android/data/dji.go.v5/files/waypoint",
+                        "/sdcard/Android/data/dji.go.v5/files/waypoint",
+                        "/storage/emulated/0/Android/data/dji.go.v5/files/Waypoint",
+                        "/sdcard/Android/data/dji.go.v5/files/Waypoint"
+                    };
+
+                    for (String djiRootPath : directDjiDirs) {
+                        try {
+                            File djiRoot = new File(djiRootPath);
+                            if (djiRoot.exists() && djiRoot.isDirectory()) {
+                                File slotFolder = new File(djiRoot, slotToInject);
+                                if (!slotFolder.exists()) slotFolder.mkdirs();
+                                File slotKmz = new File(slotFolder, slotToInject + ".kmz");
+                                try (FileOutputStream fos = new FileOutputStream(slotKmz)) {
+                                    fos.write(decodedBytes);
+                                    fos.flush();
+                                } catch (Exception ex) {
+                                    try {
+                                        Process p = Runtime.getRuntime().exec(new String[]{
+                                            "sh", "-c", "mkdir -p \"" + slotFolder.getAbsolutePath() + "\" && cp -f \"" + kmzFile.getAbsolutePath() + "\" \"" + slotKmz.getAbsolutePath() + "\" && chmod 666 \"" + slotKmz.getAbsolutePath() + "\""
+                                        });
+                                        p.waitFor();
+                                    } catch (Exception ignored) {}
+                                }
+                                slotKmz.setLastModified(System.currentTimeMillis());
+                                slotFolder.setLastModified(System.currentTimeMillis());
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                // 5. Si hay control RC 2 conectado por USB MTP:
+                if (isUsbConnected) {
                     new Thread(() -> {
-                        mtpHelper.overwriteMissionKmz(effectiveSlot, kmzFile);
+                        if (effectiveSlot != null) {
+                            mtpHelper.overwriteMissionKmz(effectiveSlot, kmzFile);
+                        } else {
+                            mtpHelper.createNewMissionSlot(kmzFile);
+                        }
                     }).start();
                 }
 
@@ -1437,10 +1451,11 @@ public class MainActivity extends AppCompatActivity implements MtpHelper.LogCall
 
                 fetchLocalMissionsAsync();
                 fetchDeviceSlotsAsync();
+
                 runOnUiThread(() -> {
                     String msg = isRc 
                         ? "✅ Misión guardada en Almacenamiento interno/Download y lista en DJI Fly"
-                        : "✅ Misión lista en KMZ y sincronizada con DJI Fly / RC 2";
+                        : "✅ Misión exportada a Download/" + missionName + ".kmz";
                     Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
                     notifyJs("refreshLocalMissions(); refreshDeviceSlots();");
                 });

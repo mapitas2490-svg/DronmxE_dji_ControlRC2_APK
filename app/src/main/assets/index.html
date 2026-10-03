@@ -3766,6 +3766,12 @@
 
       // EXPORTAR AUTOMÁTICAMENTE EN KMZ PARA RC 2 (MTP)
       try {
+        if (!AppState.waylines || AppState.waylines.length === 0) {
+          if (typeof recalculateMission === 'function') recalculateMission();
+        }
+        if (!AppState.waylines || AppState.waylines.length === 0) {
+          AppState.waylines = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+        }
         if (typeof buildDjiKmzBlob === 'function') {
           const base64Data = await buildDjiKmzBlob(name);
           if (window.AndroidBridge && window.AndroidBridge.saveKmzMission) {
@@ -4175,6 +4181,16 @@
     }
 
     async function buildDjiKmzBlob(missionName) {
+      if (!AppState.waylines || AppState.waylines.length === 0) {
+        if (typeof recalculateMission === 'function') recalculateMission();
+      }
+      if (!AppState.waylines || AppState.waylines.length === 0) {
+        if (AppState.points && AppState.points.length > 0) {
+          AppState.waylines = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+        } else {
+          AppState.waylines = [{ lat: 19.4326, lng: -99.1332 }, { lat: 19.4336, lng: -99.1322 }];
+        }
+      }
       const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
       const zip = new JSZip();
       const wpmz = zip.folder("wpmz");
@@ -4184,7 +4200,17 @@
       for (let i = 0; i < AppState.waylines.length - 1; i++) {
         const p1 = AppState.waylines[i];
         const p2 = AppState.waylines[i + 1];
-        totalDist += (window.map ? window.map.distance(L.latLng(p1.lat, p1.lng), L.latLng(p2.lat, p2.lng)) : 10);
+        try {
+          if (typeof L !== 'undefined' && L.latLng) {
+            totalDist += L.latLng(p1.lat, p1.lng).distanceTo(L.latLng(p2.lat, p2.lng));
+          } else if (window.map && typeof window.map.distance === 'function') {
+            totalDist += window.map.distance([p1.lat, p1.lng], [p2.lat, p2.lng]);
+          } else {
+            totalDist += 10;
+          }
+        } catch (e) {
+          totalDist += 10;
+        }
       }
       const totalSec = Math.max(10, Math.round(totalDist / (AppState.speed || 8)));
 
@@ -4538,7 +4564,7 @@ function toggleLog(){ document.getElementById('log-box').classList.toggle('open'
 
 function onDeviceStatusChanged(connected, description){
   var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
-  if (isRcLocal) {
+  if (isRcLocal && !connected) {
     connected = true;
     description = 'Control RC 2: Almacenamiento interno/Download';
   }
@@ -4580,20 +4606,21 @@ function renderDeviceSlots(){
   const td = document.getElementById('tab-dev');
   const pt = document.getElementById('title-panel-dev');
   var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  var isLocalRcMode = (isRcLocal && !S.connected);
 
   if(td) {
-    td.textContent = isRcLocal
+    td.textContent = isLocalRcMode
       ? '🎮 RC 2 (/Download) (' + (slots ? slots.length : 0) + ')'
       : '🎮 RC 2 (DJI Fly) (' + (slots ? slots.length : 0) + ')';
   }
   if(pt) {
-    pt.textContent = isRcLocal
+    pt.textContent = isLocalRcMode
       ? '🎮 Misiones en /Download (RC 2)'
       : '🎮 Misiones RC 2 (DJI Fly)';
   }
 
   if(!slots || slots.length === 0){
-    if(isRcLocal) {
+    if(isLocalRcMode) {
       c.innerHTML = '<div class="empty">📂 No se encontraron misiones .kmz en Almacenamiento interno/Download.<br><small style="color:var(--muted)">Guarda o crea una misión en el Planificador para verla aquí.</small></div>';
       S.selDeviceGuid = null;
       document.getElementById('dst-slot').textContent = 'Sin misión seleccionada';
@@ -4632,7 +4659,7 @@ function renderDeviceSlots(){
   slots.forEach(function(slot, i){
     const isAct = slot.guid === S.selDeviceGuid;
     const isGuid = (!slot.displayName || slot.displayName === slot.guid);
-    const nameStr = isGuid ? (isRcLocal ? slot.guid : ('Misión RC 2 (#' + shortGuid(slot.guid) + ')')) : slot.displayName;
+    const nameStr = isGuid ? (isLocalRcMode ? slot.guid : ('Misión RC 2 (#' + shortGuid(slot.guid) + ')')) : slot.displayName;
     
     if (isAct) {
       document.getElementById('dst-slot').textContent = nameStr;
@@ -4644,8 +4671,8 @@ function renderDeviceSlots(){
 
     const cid = 'cv-d-' + i;
     const wp = slot.wpCount ? (slot.wpCount + ' WP') : '-- WP';
-    const pillText = isRcLocal ? 'RC 2 · /Download' : 'DJI Fly RC 2';
-    const subIdLabel = isRcLocal ? 'Archivo: ' : 'GUID: ';
+    const pillText = isLocalRcMode ? 'RC 2 · /Download' : 'DJI Fly RC 2';
+    const subIdLabel = isLocalRcMode ? 'Archivo: ' : 'GUID: ';
 
     row.innerHTML = 
       '<div class="mrow-top">'
@@ -4942,9 +4969,9 @@ async function parseKmzWaypoints(b64){
 
 function refreshAll(){
   var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
-  if (isRcLocal) {
+  if (isRcLocal && !S.connected) {
     onDeviceStatusChanged(true, 'Control RC 2: Almacenamiento interno/Download');
-  } else if(!S.connected && window.AndroidBridge && window.AndroidBridge.refreshUsb) {
+  } else if(window.AndroidBridge && window.AndroidBridge.refreshUsb) {
     window.AndroidBridge.refreshUsb();
   }
   refreshDeviceSlots();
@@ -4953,7 +4980,7 @@ function refreshAll(){
 
 function forceReconnectUsb(){
   var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
-  if (isRcLocal) {
+  if (isRcLocal && !S.connected) {
     onDeviceStatusChanged(true, 'Control RC 2: Almacenamiento interno/Download');
     refreshDeviceSlots();
     refreshLocalMissions();
@@ -4968,7 +4995,8 @@ function forceReconnectUsb(){
 
 function refreshDeviceSlots(){
   var isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
-  var scanMsg = isRcLocal ? 'Escaneando /Download en RC 2...' : 'Escaneando RC 2...';
+  var isLocalRcMode = (isRcLocal && !S.connected);
+  var scanMsg = isLocalRcMode ? 'Escaneando /Download en RC 2...' : 'Escaneando RC 2...';
   document.getElementById('list-dev').innerHTML = '<div class="empty"><span class="spin">⏳</span> ' + scanMsg + '</div>';
   if(window.AndroidBridge){
     if(window.AndroidBridge.fetchDeviceSlotsAsync){
