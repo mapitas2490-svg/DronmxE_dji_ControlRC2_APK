@@ -11,7 +11,8 @@
     function directOverwriteSlot(guid, e) {
       if (e) e.stopPropagation();
       selectDeviceSlot(guid);
-      if (!S.connected) {
+      const isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+      if (!S.connected && !isRcLocal) {
         if (window.AndroidBridge && window.AndroidBridge.showToast) {
           window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
         } else {
@@ -44,7 +45,8 @@
       if (e) e.stopPropagation();
       const m = S.localMissions.find(x => x.name === mName);
       if (m) selectLocalMission(m);
-      if (!S.connected) {
+      const isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+      if (!S.connected && !isRcLocal) {
         if (window.AndroidBridge && window.AndroidBridge.showToast) {
           window.AndroidBridge.showToast("⚠️ Conecta el cable OTG al DJI RC 2");
         } else {
@@ -3260,6 +3262,8 @@
           const midPoint = L.latLng(midLat, midLng);
 
           const midMarker = L.marker(midPoint, {
+            draggable: true,
+            opacity: 0.75,
             icon: L.divIcon({
               className: 'custom-midpoint-icon',
               iconSize: [28, 28],
@@ -3267,6 +3271,31 @@
               html: '<div class="midpoint-dot">+</div>'
             })
           }).addTo(markersLayer);
+
+          let insertedIdx = -1;
+          midMarker.on('dragstart', function(e) {
+            insertedIdx = i + 1;
+            AppState.points.splice(insertedIdx, 0, { lat: midLat, lng: midLng });
+          });
+          midMarker.on('drag', function(e) {
+            if (insertedIdx !== -1) {
+              AppState.points[insertedIdx] = e.target.getLatLng();
+              renderBoundary();
+              recalculateMission();
+            }
+          });
+          midMarker.on('dragend', function(e) {
+            if (insertedIdx !== -1) {
+              AppState.points[insertedIdx] = e.target.getLatLng();
+              renderBoundary();
+              recalculateMission();
+              if (cur) {
+                cur.points = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+                localStorage.setItem('saved_missions', JSON.stringify(AppState.savedMissions));
+              }
+              insertedIdx = -1;
+            }
+          });
 
           midMarker.on('click', function(e) {
             L.DomEvent.stopPropagation(e);
@@ -3313,6 +3342,64 @@
       let latSum = 0, lngSum = 0;
       pts.forEach(p => { latSum += p.lat; lngSum += p.lng; });
       return L.latLng(latSum / pts.length, lngSum / pts.length);
+    }
+
+    function calculateBearing(p1, p2) {
+      const lat1 = (p1.lat !== undefined ? p1.lat : p1[0]) * Math.PI / 180;
+      const lat2 = (p2.lat !== undefined ? p2.lat : p2[0]) * Math.PI / 180;
+      const dLng = ((p2.lng !== undefined ? p2.lng : p2[1]) - (p1.lng !== undefined ? p1.lng : p1[1])) * Math.PI / 180;
+      const y = Math.sin(dLng) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+      let brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    function calculateDistance(p1, p2) {
+      if (typeof L !== 'undefined' && L.latLng) {
+        return L.latLng(p1.lat, p1.lng).distanceTo(L.latLng(p2.lat, p2.lng));
+      }
+      const R = 6371000;
+      const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+      const dLon = (p2.lng - p1.lng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function generateLinealFlightWaylines(points, speed, altitude, overlapFront) {
+      const waylines = [];
+      if (!points || points.length < 2) return waylines;
+      const cam = getEffectiveCameraSpecs();
+      const footprintH = (altitude * cam.sensorH) / cam.focal;
+      const step = Math.max(5, footprintH * (1 - (overlapFront / 100)));
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const dist = calculateDistance(p1, p2);
+        const heading = calculateBearing(p1, p2);
+
+        const steps = Math.max(1, Math.round(dist / step));
+        for (let s = 0; s < steps; s++) {
+          const frac = s / steps;
+          waylines.push({
+            lat: p1.lat + (p2.lat - p1.lat) * frac,
+            lng: p1.lng + (p2.lng - p1.lng) * frac,
+            alt: altitude,
+            heading: heading
+          });
+        }
+      }
+      const lastP = points[points.length - 1];
+      const prevP = points[points.length - 2];
+      waylines.push({
+        lat: lastP.lat,
+        lng: lastP.lng,
+        alt: altitude,
+        heading: calculateBearing(prevP, lastP)
+      });
+      return waylines;
     }
 
     function createQuickRectangle() {
@@ -3370,7 +3457,7 @@
 
       let gridWaypoints = [];
       if (AppState.mode === 'Lineal' || AppState.mode === 'Corridor') {
-        gridWaypoints = AppState.points.map(p => ({ lat: p.lat, lng: p.lng }));
+        gridWaypoints = generateLinealFlightWaylines(AppState.points, AppState.speed, AppState.altitude, AppState.frontOverlap);
       } else if (AppState.mode === '3D') {
         // Modo 3D: Doble pasada ortogonal cruzada (Cross-Hatch)
         const pass1 = generateTransectWaylines(AppState.points, lineSpacing, photoSpacing, AppState.gridAngle || 0);
@@ -4191,7 +4278,7 @@
           AppState.waylines = [{ lat: 19.4326, lng: -99.1332 }, { lat: 19.4336, lng: -99.1322 }];
         }
       }
-      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_MINI_5_PRO;
+      const cam = CameraSpecs[AppState.camera] || CameraSpecs.DJI_AIR_3S;
       const zip = new JSZip();
       const wpmz = zip.folder("wpmz");
       const safeName = missionName || 'mision_dji';
@@ -4589,9 +4676,10 @@ function onLogMessage(msg){ appendLog(msg); }
 function updateSyncBtn(){
   const hasLocal = !!S.selLocalMission;
   const hasDevice = !!S.selDeviceGuid;
-  const isConnected = !!S.connected;
-  document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice && isConnected);
-  document.getElementById('btn-new').disabled = !(hasLocal && isConnected);
+  const isRcLocal = window.AndroidBridge && window.AndroidBridge.isDjiRcDevice && window.AndroidBridge.isDjiRcDevice();
+  const canTransfer = S.connected || isRcLocal;
+  document.getElementById('btn-sync').disabled = !(hasLocal && hasDevice && canTransfer);
+  document.getElementById('btn-new').disabled = !(hasLocal && canTransfer);
 }
 
 function switchTab(tab){
