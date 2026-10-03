@@ -489,16 +489,57 @@ public class MtpHelper {
                             } else {
                                 slot.folderHandle = h;
                                 int[] sub = device.getObjectHandles(storageId, 0, h);
+                                StringBuilder sbSub = new StringBuilder();
                                 if (sub != null && sub.length > 0) {
                                     for (int sh : sub) {
                                         MtpObjectInfo subObj = device.getObjectInfo(sh);
-                                        if (subObj != null && subObj.getName() != null && subObj.getName().toLowerCase().endsWith(".kmz")) {
-                                            slot.kmzHandle = sh; 
-                                            slot.size = subObj.getCompressedSize();
-                                            break;
+                                        if (subObj != null && subObj.getName() != null) {
+                                            String sname = subObj.getName();
+                                            sbSub.append(sname).append("(size=").append(subObj.getCompressedSize()).append("), ");
+                                            if (sname.equalsIgnoreCase("image")) {
+                                                int[] imgSubs = device.getObjectHandles(storageId, 0, sh);
+                                                if (imgSubs != null && imgSubs.length > 0) {
+                                                    for (int ish : imgSubs) {
+                                                        MtpObjectInfo iInfo = device.getObjectInfo(ish);
+                                                        if (iInfo != null) {
+                                                            sbSub.append("image/").append(iInfo.getName()).append("(size=").append(iInfo.getCompressedSize()).append("), ");
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (sname.toLowerCase().endsWith(".kmz") || sname.toLowerCase().endsWith(".kml") || sname.toLowerCase().endsWith(".wpml")) {
+                                                if (slot.kmzHandle == -1 || sname.toLowerCase().endsWith(".kmz")) {
+                                                    slot.kmzHandle = sh; 
+                                                    slot.size = subObj.getCompressedSize();
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                                callback.onLog("[SCAN-SUB] " + name + " -> [" + sbSub.toString() + "]");
+                            }
+
+                            if (name.equalsIgnoreCase("map_preview")) {
+                                int[] mpSubs = device.getObjectHandles(storageId, 0, h);
+                                StringBuilder sbMp = new StringBuilder();
+                                if (mpSubs != null) {
+                                    for (int mph : mpSubs) {
+                                        MtpObjectInfo mpInfo = device.getObjectInfo(mph);
+                                        if (mpInfo != null) {
+                                            sbMp.append(mpInfo.getName()).append("(size=").append(mpInfo.getCompressedSize()).append("), ");
+                                            int[] mpChildren = device.getObjectHandles(storageId, 0, mph);
+                                            if (mpChildren != null && mpChildren.length > 0) {
+                                                for (int mpc : mpChildren) {
+                                                    MtpObjectInfo mpcInfo = device.getObjectInfo(mpc);
+                                                    if (mpcInfo != null) {
+                                                        sbMp.append(mpInfo.getName()).append("/").append(mpcInfo.getName()).append("(size=").append(mpcInfo.getCompressedSize()).append("), ");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                callback.onLog("[MAP-PREVIEW-DETAIL] " + sbMp.toString());
                             }
 
                             if (slot.kmzHandle != -1) {
@@ -508,11 +549,15 @@ public class MtpHelper {
                                 }
                                 byte[] data = device.getObject(slot.kmzHandle, readSize);
                                 if (data != null && data.length > 0) {
+                                    try {
+                                        File dDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                                        File dumpF = new File(dDir, "dump_" + slot.guid + ".kmz");
+                                        try (FileOutputStream fos = new FileOutputStream(dumpF)) {
+                                            fos.write(data);
+                                        }
+                                    } catch (Exception ignored) {}
                                     KmzParsedInfo pi = parseKmzFast(data);
-                                    if ((pi.missionName == null || pi.missionName.trim().isEmpty() || pi.missionName.equalsIgnoreCase("Document")) && pi.wpCount <= 2) {
-                                        callback.onLog("[SCAN] Ranura fantasma/incompleta ignorada: " + slot.guid);
-                                        continue;
-                                    }
+                                    callback.onLog("[SCAN-PARSE] " + slot.guid + ": name='" + pi.missionName + "', wp=" + pi.wpCount);
                                     slot.wpCount = pi.wpCount;
                                     slot.displayName = pi.missionName;
                                     slot.coords = pi.coords;
